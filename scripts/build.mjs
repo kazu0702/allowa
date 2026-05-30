@@ -1,0 +1,24 @@
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
+const root = process.cwd();
+const dist = join(root, "dist");
+
+await rm(dist, { recursive: true, force: true });
+await mkdir(dist, { recursive: true });
+
+await Promise.all([
+  copyFile(join(root, "app", "index.html"), join(dist, "index.html")),
+  copyFile(join(root, "app", "styles.css"), join(dist, "styles.css")),
+  copyFile(join(root, "app", "app.js"), join(dist, "app.js")),
+]);
+
+const config = {
+  url: process.env.STUDYPAY_SUPABASE_URL || "",
+  anonKey: process.env.STUDYPAY_SUPABASE_ANON_KEY || "",
+};
+
+await writeFile(
+  join(dist, "config.js"),
+  `window.STUDYPAY_SUPABASE_CONFIG = ${JSON.stringify(config, null, 2)};\n`,
+);
