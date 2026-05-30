@@ -21,5 +21,8 @@ for all
 using (true)
 with check (true);
 
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.account_snapshots to anon, authenticated;
+
 comment on table public.account_snapshots is
   'StudyPay MVP snapshot storage. Replace with authenticated relational tables before public production.';
