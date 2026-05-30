@@ -1,0 +1,8 @@
+{
+  "name": "studypay-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && cp app/index.html app/styles.css app/app.js dist/"
+  }
+}
