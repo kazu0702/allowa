@@ -85,6 +85,11 @@
       return;
     }
 
+    if (route === "/child/apply" || route.startsWith("/child/apply/") || route.startsWith("/child/reapply/")) {
+      upgradeApplyScreen(screen);
+      return;
+    }
+
     upgradeSubScreen(screen, route);
   }
 
@@ -159,6 +164,134 @@
     upgradeBottomNav(screen, route);
     screen.querySelector(".page-heading")?.classList.add("child-page-heading");
     screen.querySelectorAll(".application-card").forEach((card) => card.classList.add("child-history-card"));
+  }
+
+  function upgradeApplyScreen(screen) {
+    const child = getCurrentChildData();
+    screen.classList.add("child-apply-design");
+    upgradeHeader(screen);
+    upgradeBottomNav(screen, "/child/apply");
+
+    const pageHeading = screen.querySelector(".page-heading");
+    if (pageHeading && !screen.querySelector(".child-apply-hero")) {
+      pageHeading.classList.add("child-apply-hero");
+      pageHeading.innerHTML = `
+        <button class="child-back-button" type="button" data-route="/child" aria-label="ホームへ戻る">‹</button>
+        <div>
+          <span>新規登録</span>
+          <h1>今日のがんばり</h1>
+          <p>写真と内容を送って、保護者に確認してもらいます。</p>
+        </div>
+      `;
+    }
+
+    const form = screen.querySelector("#application-form");
+    if (!form) {
+      return;
+    }
+
+    form.classList.add("child-apply-card");
+    form.querySelector(".child-form-intro")?.remove();
+    decorateCategoryField(form);
+    decoratePhotoField(form);
+    decorateSubmitArea(form);
+
+    const subjectLabel = form.querySelector('label[for="application-subject"]');
+    if (subjectLabel) {
+      subjectLabel.textContent = "何をがんばった？";
+    }
+
+    const commentLabel = form.querySelector('label[for="child-comment"]');
+    if (commentLabel) {
+      commentLabel.textContent = "ひとことメモ";
+    }
+
+    const comment = form.querySelector("#child-comment");
+    if (comment) {
+      comment.placeholder = "がんばったところ、見てほしいところを書いてね";
+    }
+
+    const firstOption = form.querySelector("#application-subject option");
+    if (firstOption && child?.subjects?.length) {
+      firstOption.selected = true;
+    }
+  }
+
+  function decorateCategoryField(form) {
+    const categoryField = form.querySelector("#application-category")?.closest(".field");
+    if (!categoryField || categoryField.querySelector(".child-category-options")) {
+      return;
+    }
+
+    categoryField.classList.add("child-category-field");
+    const select = categoryField.querySelector("#application-category");
+    const options = [
+      ["test", "テスト", "点数を記録"],
+      ["grade", "成績表", "通知表や評価"],
+      ["other", "その他", "お手伝いなど"],
+    ];
+    const optionWrap = document.createElement("div");
+    optionWrap.className = "child-category-options";
+    optionWrap.innerHTML = options
+      .map(
+        ([value, label, copy]) => `
+          <button class="child-category-option ${select.value === value ? "active" : ""}" type="button" data-category-value="${value}">
+            <span>${escapeText(label)}</span>
+            <small>${escapeText(copy)}</small>
+          </button>
+        `,
+      )
+      .join("");
+    categoryField.appendChild(optionWrap);
+
+    optionWrap.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-category-value]");
+      if (!button) {
+        return;
+      }
+
+      select.value = button.dataset.categoryValue;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      optionWrap.querySelectorAll(".child-category-option").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+    });
+  }
+
+  function decoratePhotoField(form) {
+    const photoInput = form.querySelector("#application-photos");
+    const photoField = photoInput?.closest(".field");
+    if (!photoField || photoField.querySelector(".child-photo-drop")) {
+      return;
+    }
+
+    photoField.classList.add("child-photo-field");
+    const drop = document.createElement("label");
+    drop.className = "child-photo-drop";
+    drop.setAttribute("for", "application-photos");
+    drop.innerHTML = `
+      <span class="child-photo-icon" aria-hidden="true"></span>
+      <strong>写真を追加</strong>
+      <small>テスト・成績は1〜3枚まで</small>
+    `;
+    photoInput.insertAdjacentElement("afterend", drop);
+    photoInput.addEventListener("change", () => {
+      const count = photoInput.files?.length || 0;
+      drop.querySelector("small").textContent = count ? `${count}枚選択中` : "テスト・成績は1〜3枚まで";
+    });
+  }
+
+  function decorateSubmitArea(form) {
+    const submit = form.querySelector('button[type="submit"]');
+    const cancel = Array.from(form.querySelectorAll("button")).find((button) => button.textContent.includes("キャンセル"));
+    if (!submit || form.querySelector(".child-submit-note")) {
+      return;
+    }
+
+    submit.textContent = "登録する";
+    submit.classList.add("child-submit-button");
+    cancel?.classList.add("child-cancel-button");
+    submit.insertAdjacentHTML("beforebegin", `<p class="child-submit-note">送信すると、保護者の確認待ちになります。</p>`);
   }
 
   function upgradeHeader(screen) {
@@ -865,6 +998,248 @@
         line-height: 1;
       }
 
+      .child-apply-design {
+        min-height: 100dvh;
+        padding: 0 20px 118px;
+        background: linear-gradient(180deg, #fff 0, #fff 70px, #fff8f1 70px, #fffaf6 100%);
+      }
+
+      .child-apply-design .child-topbar {
+        display: none;
+      }
+
+      .child-apply-hero {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+        margin: 0 -20px 20px;
+        border-bottom: 1px solid #f1e5dc;
+        background: #fff;
+        padding: 16px 20px 20px;
+      }
+
+      .child-back-button {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 0;
+        border-radius: 50%;
+        background: #fff3e7;
+        color: #9a5b00;
+        font-size: 34px;
+        line-height: 1;
+        font-weight: 800;
+      }
+
+      .child-apply-hero span {
+        color: #ff8200;
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .child-apply-hero h1 {
+        margin: 4px 0 6px;
+        font-size: 28px;
+        line-height: 1.25;
+        letter-spacing: 0;
+      }
+
+      .child-apply-hero p {
+        margin: 0;
+        color: #6f6258;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.55;
+      }
+
+      .child-apply-card {
+        display: grid;
+        gap: 18px;
+        border: 0;
+        border-radius: 28px;
+        background: #fff;
+        padding: 22px;
+        box-shadow: 0 12px 28px rgba(119, 85, 40, 0.08);
+      }
+
+      .child-apply-card .field {
+        display: grid;
+        gap: 9px;
+      }
+
+      .child-apply-card label {
+        color: #1d1712;
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .child-apply-card input,
+      .child-apply-card select,
+      .child-apply-card textarea {
+        width: 100%;
+        min-height: 54px;
+        border: 1px solid #f0dfcf;
+        border-radius: 18px;
+        background: #fffaf5;
+        color: #1d1712;
+        padding: 13px 15px;
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+
+      .child-apply-card textarea {
+        min-height: 112px;
+        resize: vertical;
+        line-height: 1.65;
+      }
+
+      .child-category-field > select {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .child-category-options {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .child-category-option {
+        display: grid;
+        gap: 5px;
+        min-height: 78px;
+        border: 1px solid #f0dfcf;
+        border-radius: 20px;
+        background: #fffaf5;
+        color: #2a1c12;
+        padding: 12px 8px;
+        text-align: center;
+      }
+
+      .child-category-option span {
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .child-category-option small {
+        color: #7a6a5f;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      .child-category-option.active {
+        border-color: #ff8200;
+        background: #ff8a12;
+        color: #fff;
+        box-shadow: 0 10px 20px rgba(255, 130, 0, 0.18);
+      }
+
+      .child-category-option.active small {
+        color: rgba(255, 255, 255, 0.86);
+      }
+
+      .child-photo-field input[type="file"] {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        opacity: 0;
+      }
+
+      .child-photo-drop {
+        display: grid;
+        place-items: center;
+        gap: 7px;
+        min-height: 142px;
+        border: 2px dashed #f0c79c;
+        border-radius: 24px;
+        background: #fff8ef;
+        color: #8a4c00;
+        text-align: center;
+      }
+
+      .child-photo-icon {
+        position: relative;
+        width: 54px;
+        height: 42px;
+        border-radius: 12px;
+        background: #ff8200;
+      }
+
+      .child-photo-icon::before {
+        content: "";
+        position: absolute;
+        left: 9px;
+        top: -8px;
+        width: 20px;
+        height: 10px;
+        border-radius: 8px 8px 0 0;
+        background: #ff8200;
+      }
+
+      .child-photo-icon::after {
+        content: "";
+        position: absolute;
+        left: 19px;
+        top: 12px;
+        width: 17px;
+        height: 17px;
+        border: 4px solid #fff;
+        border-radius: 50%;
+      }
+
+      .child-photo-drop strong {
+        font-size: 18px;
+      }
+
+      .child-photo-drop small,
+      .child-apply-card .field-help,
+      .child-submit-note {
+        color: #7a6a5f;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.55;
+      }
+
+      .child-submit-note {
+        margin: 4px 0 -4px;
+        text-align: center;
+      }
+
+      .child-submit-button {
+        min-height: 58px;
+        border: 0;
+        border-radius: 999px;
+        background: #ff8200;
+        color: #fff;
+        font-size: 18px;
+        font-weight: 900;
+        box-shadow: 0 12px 22px rgba(255, 130, 0, 0.24);
+      }
+
+      .child-cancel-button {
+        min-height: 52px;
+        border: 1px solid #f0dfcf;
+        border-radius: 999px;
+        background: #fff;
+        color: #8a4c00;
+        font-size: 16px;
+        font-weight: 900;
+      }
+
+      .child-apply-card .error {
+        color: #c7372f;
+        font-weight: 900;
+      }
+
       @media (max-width: 380px) {
         .child-design-home {
           padding-inline: 16px;
@@ -899,6 +1274,23 @@
         }
 
         .child-hint-card {
+          grid-template-columns: 1fr;
+        }
+
+        .child-apply-design {
+          padding-inline: 16px;
+        }
+
+        .child-apply-hero {
+          margin-inline: -16px;
+          padding-inline: 16px;
+        }
+
+        .child-apply-card {
+          padding: 18px;
+        }
+
+        .child-category-options {
           grid-template-columns: 1fr;
         }
       }
