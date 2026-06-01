@@ -3,6 +3,7 @@
 
   ensureStyles();
   scheduleUpgrade();
+  bindLoginRedirectGuard();
 
   window.addEventListener("hashchange", scheduleUpgrade);
   document.addEventListener("click", (event) => {
@@ -10,6 +11,36 @@
       scheduleUpgrade();
     }
   });
+
+  function bindLoginRedirectGuard() {
+    document.addEventListener("click", (event) => {
+      if (event.target.closest('[data-route="/demo-child-login"]')) {
+        scheduleLoginRedirectGuard();
+      }
+    });
+
+    document.addEventListener(
+      "submit",
+      (event) => {
+        if (event.target?.id === "child-login-form") {
+          scheduleLoginRedirectGuard();
+        }
+      },
+      true,
+    );
+  }
+
+  function scheduleLoginRedirectGuard() {
+    window.setTimeout(reloadIfChildLoginIsStuck, 600);
+    window.setTimeout(reloadIfChildLoginIsStuck, 1400);
+  }
+
+  function reloadIfChildLoginIsStuck() {
+    const route = location.hash.replace("#", "") || "/";
+    if (route === "/child" && document.querySelector("#child-login-form")) {
+      location.reload();
+    }
+  }
 
   function scheduleUpgrade() {
     window.setTimeout(upgradeChildScreen, 0);
