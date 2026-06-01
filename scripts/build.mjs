@@ -13,6 +13,7 @@ await Promise.all([
   copyFile(join(root, "app", "app.js"), join(dist, "app.js")),
   copyFile(join(root, "app", "cloud.js"), join(dist, "cloud.js")),
   copyFile(join(root, "app", "monthly-bonus.js"), join(dist, "monthly-bonus.js")),
+  copyFile(join(root, "app", "child-design.js"), join(dist, "child-design.js")),
 ]);
 
 const config = {
