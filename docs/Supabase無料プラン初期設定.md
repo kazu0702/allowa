@@ -44,11 +44,11 @@ URLとanon keyが公開される前提のため、本番化前にはSupabase Aut
 
 ## 実装メモ
 
-現在のSupabase同期は `app/app.js` に統合している。
+現在のSupabase同期は、公開版との互換性を優先して `app/cloud.js` から有効化している。
 
-- `saveAccount()` 実行時に `account_snapshots` へupsertする。
-- 起動時に `hydrateAccountFromCloud()` でSupabase側の新しいスナップショットを取得する。
-- `app/index.html` ではSupabase CDN、`config.js`、`app.js` を読み込む。
+- `localStorage` の `studypay_parent_account` 変更時に `account_snapshots` へupsertする。
+- 起動時にSupabase側の新しいスナップショットを取得する。
+- `app/index.html` ではSupabase CDN、`config.js`、`app.js`、`cloud.js` を読み込む。
 - `scripts/build.mjs` はVercel用に `config.js` を生成する。
 
-過去に使っていた `app/cloud.js` は後付け同期用の補助ファイルであり、現在は二重同期を避けるため読み込まない。
+注意: ローカルの `app/app.js` 側にもSupabase同期処理が入っている場合がある。GitHub公開版と統合する際は、同期処理を1系統に整理する。
