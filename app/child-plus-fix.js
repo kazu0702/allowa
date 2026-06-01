@@ -23,7 +23,7 @@
       location.hash = "/child/apply";
     }
 
-    [0, 120, 360].forEach((delay) => {
+    [120, 360].forEach((delay) => {
       window.setTimeout(ensureChildApplyRendered, delay);
     });
   }
@@ -34,10 +34,6 @@
       return;
     }
 
-    if (typeof state !== "undefined" && typeof render === "function") {
-      state.route = route;
-      render();
-      window.dispatchEvent(new HashChangeEvent("hashchange"));
-    }
+    location.reload();
   }
 })();
