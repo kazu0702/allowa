@@ -41,3 +41,14 @@ STUDYPAY_SUPABASE_ANON_KEY=Supabaseのanon public key
 URLとanon keyが公開される前提のため、本番化前にはSupabase Authを導入し、親アカウントごとのアクセス制御に変更する。
 
 写真保存は無料枠を圧迫しやすいため、次の段階でStorage保存と画像圧縮を入れる。
+
+## 実装メモ
+
+現在のSupabase同期は `app/app.js` に統合している。
+
+- `saveAccount()` 実行時に `account_snapshots` へupsertする。
+- 起動時に `hydrateAccountFromCloud()` でSupabase側の新しいスナップショットを取得する。
+- `app/index.html` ではSupabase CDN、`config.js`、`app.js` を読み込む。
+- `scripts/build.mjs` はVercel用に `config.js` を生成する。
+
+過去に使っていた `app/cloud.js` は後付け同期用の補助ファイルであり、現在は二重同期を避けるため読み込まない。
