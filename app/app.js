@@ -797,8 +797,58 @@ function parentHomeView() {
         <button class="primary-button compact-button" type="button" data-route="${primaryActionRoute}">${primaryActionLabel}</button>
       </div>
 
+      ${parentHomeChildrenStatus(children)}
+
       ${bottomNav("home")}
     </section>
+  `;
+}
+
+function parentHomeChildrenStatus(children) {
+  if (!children.length) {
+    return `
+      <section class="parent-child-status-section">
+        <div class="section-label">子どもの状況</div>
+        <button class="card parent-child-status-empty" type="button" data-route="/parent/children/new">
+          <span>子どもを追加する</span>
+          ${studyPayIcon("chevron-right", "settings-menu-chevron")}
+        </button>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="parent-child-status-section">
+      <div class="section-label">子どもの状況</div>
+      <div class="parent-child-status-list">
+        ${children.map(parentHomeChildStatusCard).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function parentHomeChildStatusCard(child) {
+  const pendingApplications = getChildApplications(child).filter((application) => application.status === "pending").length;
+  const pendingRedemptions = getChildRedemptions(child).filter((redemption) => redemption.status === "pending").length;
+  const monthlyEarnedPoints = getMonthlyEarnedPoints(child);
+  const redemptionLabel = pendingRedemptions ? `${pendingRedemptions}件` : "なし";
+
+  return `
+    <button class="card parent-child-status-card" type="button" data-route="/parent/children/${child.id}">
+      <span class="child-avatar parent-child-status-avatar">${escapeHtml(child.nickname.slice(0, 1))}</span>
+      <span class="parent-child-status-main">
+        <span class="parent-child-status-head">
+          <strong>${escapeHtml(child.nickname)}</strong>
+          <span>${getAvailablePoints(child).toLocaleString()}ポイント</span>
+        </span>
+        <span class="parent-child-status-metrics">
+          <span>確認中 ${pendingApplications}件</span>
+          <span>今月付与 ${monthlyEarnedPoints.toLocaleString()}ポイント</span>
+          <span>おこづかい申請 ${redemptionLabel}</span>
+        </span>
+      </span>
+      ${studyPayIcon("chevron-right", "settings-menu-chevron")}
+    </button>
   `;
 }
 

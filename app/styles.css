@@ -676,6 +676,99 @@ button {
   margin-top: 14px;
 }
 
+.parent-child-status-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-bottom: 90px;
+}
+
+.section-label {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.parent-child-status-list {
+  display: grid;
+  gap: 10px;
+}
+
+.parent-child-status-card,
+.parent-child-status-empty {
+  display: grid;
+  align-items: center;
+  width: 100%;
+  border-color: var(--line);
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+}
+
+.parent-child-status-card {
+  grid-template-columns: 42px minmax(0, 1fr) 20px;
+  gap: 12px;
+  padding: 14px;
+}
+
+.parent-child-status-empty {
+  grid-template-columns: minmax(0, 1fr) 20px;
+  min-height: 58px;
+  padding: 0 14px;
+  font-weight: 800;
+}
+
+.parent-child-status-avatar {
+  width: 42px;
+  height: 42px;
+  background: #fff4df;
+  color: var(--primary-dark);
+}
+
+.parent-child-status-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.parent-child-status-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.parent-child-status-head strong {
+  overflow: hidden;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parent-child-status-head span {
+  flex: 0 0 auto;
+  color: var(--primary-dark);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.parent-child-status-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.parent-child-status-metrics span {
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .task-card {
   padding: 16px;
 }
