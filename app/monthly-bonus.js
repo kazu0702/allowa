@@ -59,10 +59,6 @@
               <strong>${pendingCount}件</strong>
             </div>
           </div>
-          <div class="small-cat child-points-cat" aria-label="イメージキャラクター" role="img">
-            <span class="small-cat-ears"></span>
-            <span class="small-cat-face"></span>
-          </div>
         </div>
 
         <section class="child-section">
@@ -74,7 +70,7 @@
             ${
               recentApplications.length
                 ? recentApplications.map(childRecentActivityCard).join("")
-                : `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
+                : `<div class="card empty-state"><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
             }
           </div>
         </section>
@@ -146,7 +142,7 @@
         <div class="application-list">
           ${
             applications.length === 0
-              ? `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
+              ? `<div class="card empty-state"><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
               : applications.map(applicationCard).join("")
           }
         </div>
@@ -290,10 +286,6 @@
               <div class="summary-number">${pendingApplications.length}件</div>
               <p>${primaryActionCopy}</p>
             </div>
-            <div class="small-cat overview-cat" aria-label="イメージキャラクター" role="img">
-              <span class="small-cat-ears"></span>
-              <span class="small-cat-face"></span>
-            </div>
           </div>
           <div class="metric-grid">
             <div class="metric-item">
@@ -310,31 +302,6 @@
             </div>
           </div>
           <button class="primary-button compact-button" type="button" data-route="${primaryActionRoute}">${primaryActionLabel}</button>
-        </div>
-
-        <div class="home-grid">
-          <div class="card task-card task-card-feature">
-            <span class="status-pill home-pill">家庭内ルール</span>
-            <h2>月次ボーナス</h2>
-            <p>追加ポイントを付ける月だけ、内容を確認して付与できます。</p>
-            <button class="secondary-button compact-button" type="button" data-route="/parent/monthly-bonus">月次ボーナスを見る</button>
-          </div>
-          <div class="card task-card">
-            <h2>通知</h2>
-            <p>未読通知が ${unreadCount} 件あります。</p>
-            <button class="secondary-button compact-button" type="button" data-route="/parent/notifications">通知を見る</button>
-          </div>
-          <div class="card task-card">
-            <h2>おこづかい申請</h2>
-            <p>確認待ちが ${pendingRedemptions.length} 件あります。</p>
-            <button class="secondary-button compact-button" type="button" data-route="/parent/redemptions">おこづかい申請を見る</button>
-          </div>
-          <div class="card task-card">
-            <h2>子ども管理</h2>
-            <p>${childCount === 0 ? "子どもを追加して、ログインIDとパスワードを発行します。" : "子どものポイント、科目、ルールを確認できます。"}</p>
-            <button class="primary-button compact-button" type="button" data-route="${childCount === 0 ? "/parent/children/new" : "/parent/children"}">${childCount === 0 ? "子どもを追加する" : "子ども一覧を見る"}</button>
-          </div>
-          ${childrenPreview(children)}
         </div>
 
         ${bottomNav("home")}
@@ -394,10 +361,6 @@
                   <div>
                     <span class="summary-kicker">今月の確認</span>
                     <h2>${escapeHtml(selectedChild?.nickname || "子ども")}への追加ポイント</h2>
-                  </div>
-                  <div class="small-cat overview-cat" aria-label="イメージキャラクター" role="img">
-                    <span class="small-cat-ears"></span>
-                    <span class="small-cat-face"></span>
                   </div>
                 </div>
                 <div class="field">
@@ -513,7 +476,7 @@
   function monthlyBonusList(child) {
     const bonuses = getChildMonthlyBonuses(child);
     if (!bonuses.length) {
-      return `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>月次ボーナス履歴はまだありません</strong><p>付与するとここに表示されます。</p></div>`;
+      return `<div class="card empty-state"><strong>月次ボーナス履歴はまだありません</strong><p>付与するとここに表示されます。</p></div>`;
     }
 
     return bonuses.map(monthlyBonusCard).join("");
@@ -898,12 +861,6 @@
         line-height: 1.55;
       }
 
-      .small-cat.overview-cat {
-        width: 64px;
-        height: 64px;
-        opacity: 0.92;
-      }
-
       .metric-grid,
       .monthly-metrics {
         display: grid;
@@ -1208,15 +1165,6 @@
       .child-points-metrics strong {
         font-size: 18px;
         line-height: 1.2;
-      }
-
-      .child-points-cat {
-        position: absolute;
-        right: 16px;
-        bottom: 14px;
-        z-index: 0;
-        opacity: 0.18;
-        transform: scale(1.15);
       }
 
       .child-section {

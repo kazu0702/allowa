@@ -38,16 +38,12 @@
               <span>今月の獲得</span>
               <strong>+${monthlyEarnedPoints.toLocaleString()}pt</strong>
             </div>
-            <div>
-              <span>確認待ち</span>
-              <strong>${pendingCount}件</strong>
-            </div>
-          </div>
-          <div class="small-cat child-points-cat" aria-label="イメージキャラクター" role="img">
-            <span class="small-cat-ears"></span>
-            <span class="small-cat-face"></span>
+          <div>
+            <span>確認待ち</span>
+            <strong>${pendingCount}件</strong>
           </div>
         </div>
+      </div>
 
         <section class="child-section">
           <div class="child-section-heading">
@@ -58,7 +54,7 @@
             ${
               recentApplications.length
                 ? recentApplications.map(childRecentActivityCard).join("")
-                : `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
+                : `<div class="card empty-state"><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
             }
           </div>
         </section>
@@ -119,7 +115,7 @@
         <div class="application-list">
           ${
             applications.length === 0
-              ? `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
+              ? `<div class="card empty-state"><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
               : filteredApplications.length === 0
                 ? `<div class="card empty-state"><strong>この状態の履歴はありません</strong><p>別の状態を選んで確認できます。</p></div>`
                 : filteredApplications.map(applicationCard).join("")
@@ -494,10 +490,6 @@
             <strong>${escapeChildDesignText(getPendingSummaryText(screen))}</strong>
           </div>
         </div>
-        <div class="small-cat child-points-cat" aria-label="イメージキャラクター" role="img">
-          <span class="small-cat-ears"></span>
-          <span class="small-cat-face"></span>
-        </div>
       `;
     }
 
@@ -828,15 +820,6 @@
       .child-points-metrics strong {
         font-size: 18px;
         line-height: 1.2;
-      }
-
-      .child-points-cat {
-        position: absolute;
-        right: 16px;
-        bottom: 14px;
-        z-index: 0;
-        opacity: 0.18;
-        transform: scale(1.15);
       }
 
       .child-section {

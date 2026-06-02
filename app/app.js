@@ -329,6 +329,42 @@ function renderParentRoute(app, route) {
 
   if (route === "/parent/settings") {
     app.innerHTML = parentSettingsView();
+    bindParentShell();
+    return;
+  }
+
+  if (route === "/parent/settings/email") {
+    app.innerHTML = parentEmailSettingsView();
+    bindParentShell();
+    return;
+  }
+
+  if (route === "/parent/settings/password") {
+    app.innerHTML = parentPasswordSettingsView();
+    bindParentShell();
+    return;
+  }
+
+  if (route === "/parent/settings/logout") {
+    app.innerHTML = parentLogoutSettingsView();
+    bindParentShell();
+    return;
+  }
+
+  if (route === "/parent/settings/cancel") {
+    app.innerHTML = parentCancelSettingsView();
+    bindParentShell();
+    return;
+  }
+
+  if (route === "/parent/settings/cloud") {
+    app.innerHTML = parentCloudSettingsView();
+    bindParentShell();
+    return;
+  }
+
+  if (route === "/parent/settings/data") {
+    app.innerHTML = parentDataSettingsView();
     bindParentSettings();
     return;
   }
@@ -508,26 +544,12 @@ function topbar() {
   `;
 }
 
-function catMarkup() {
-  return `
-    <div class="cat" aria-label="イメージキャラクター" role="img">
-      <span class="cat-ears"></span>
-      <span class="cat-tail"></span>
-      <span class="cat-face"></span>
-      <span class="cat-coin">pt</span>
-    </div>
-  `;
-}
-
 function lpView() {
   return `
     <section class="screen lp-screen">
       ${topbar()}
 
       <div class="hero">
-        <div class="cat-stage">
-          ${catMarkup()}
-        </div>
         <h1>がんばった成績を、おこづかいに。</h1>
         <p>テストや学習成果を子どもが自分で申請し、保護者が確認してポイント付与。がんばりが数字で増えるから、次も挑戦したくなります。</p>
         <div class="hero-actions">
@@ -734,19 +756,18 @@ function parentHomeView() {
       : "今日は急ぎの申請はありません。子ども情報やルールを確認できます。";
   return `
     <section class="screen home-screen">
-      <div class="topbar">
+      <div class="topbar parent-home-topbar">
         <div class="brand">
-          <span class="brand-mark">S</span>
-          <span>スタディペイ</span>
+          <img class="header-logo-image parent-header-logo-image" src="./logo.png" alt="スタディペイ" />
         </div>
-        <button class="text-button" type="button" id="logout-button">ログアウト</button>
+        <div class="parent-header-profile">
+          ${studyPayIcon("circle-user-round", "parent-profile-icon")}
+          <span>${escapeHtml(parent.nickname || "保護者")}</span>
+        </div>
       </div>
 
-      <div class="home-heading compact-heading">
-        <span class="eyebrow">今日の確認</span>
-        <h1>${escapeHtml(parent.nickname)}さん</h1>
-        <p>申請、おこづかい、家庭内ルールをまとめて確認できます。</p>
-        <p class="fine-print">${subscriptionSummary(subscription)}</p>
+      <div class="parent-home-status">
+        <p class="parent-trial-banner">${parentHomeSubscriptionSummary(subscription)}</p>
       </div>
 
       ${subscription.status === "grace_period" ? `<div class="notice-card">支払い確認中です。猶予期間中は通常どおり利用できます。</div>` : ""}
@@ -757,10 +778,6 @@ function parentHomeView() {
             <span class="summary-kicker">未確認の申請</span>
             <div class="summary-number">${pendingApplications.length}件</div>
             <p>${primaryActionCopy}</p>
-          </div>
-          <div class="small-cat overview-cat" aria-label="イメージキャラクター" role="img">
-            <span class="small-cat-ears"></span>
-            <span class="small-cat-face"></span>
           </div>
         </div>
         <div class="metric-grid">
@@ -780,31 +797,6 @@ function parentHomeView() {
         <button class="primary-button compact-button" type="button" data-route="${primaryActionRoute}">${primaryActionLabel}</button>
       </div>
 
-      <div class="home-grid">
-        <div class="card task-card task-card-feature">
-          <span class="status-pill home-pill">家庭内ルール</span>
-          <h2>月次ボーナス</h2>
-          <p>追加ポイントを付ける月だけ、内容を確認して付与できます。</p>
-          <button class="secondary-button compact-button" type="button" data-route="/parent/monthly-bonus">月次ボーナスを見る</button>
-        </div>
-        <div class="card task-card">
-          <h2>通知</h2>
-          <p>未読通知が ${unreadCount} 件あります。</p>
-          <button class="secondary-button compact-button" type="button" data-route="/parent/notifications">通知を見る</button>
-        </div>
-        <div class="card task-card">
-          <h2>おこづかい申請</h2>
-          <p>確認待ちが ${pendingRedemptions.length} 件あります。</p>
-          <button class="secondary-button compact-button" type="button" data-route="/parent/redemptions">おこづかい申請を見る</button>
-        </div>
-        <div class="card task-card">
-          <h2>子ども管理</h2>
-          <p>${childCount === 0 ? "子どもを追加して、ログインIDとパスワードを発行します。" : "子どものポイント、科目、ルールを確認できます。"}</p>
-          <button class="primary-button compact-button" type="button" data-route="${childCount === 0 ? "/parent/children/new" : "/parent/children"}">${childCount === 0 ? "子どもを追加する" : "子ども一覧を見る"}</button>
-        </div>
-        ${childrenPreview(children)}
-      </div>
-
       ${bottomNav("home")}
     </section>
   `;
@@ -814,64 +806,108 @@ function parentNotificationsView() {
   const parent = loadAccount() || state.parent || initialParent;
   return `
     <section class="screen home-screen">
-      ${parentHeader("通知")}
-      <div class="page-heading">
-        <div>
-          <h1>通知</h1>
-          <p>未読 ${getUnreadNotifications(parent).length} 件</p>
-        </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent">ホーム</button>
+      ${parentPlainHeader("通知")}
+      <div class="page-heading settings-page-heading">
+        <p>未読 ${getUnreadNotifications(parent).length} 件</p>
       </div>
 
       ${notificationList(parent.notifications || [])}
 
       ${parent.notifications?.length ? `<button class="secondary-button" type="button" id="read-parent-notifications">すべて既読にする</button>` : ""}
 
-      ${bottomNav("settings")}
+      ${bottomNav("notifications")}
     </section>
   `;
 }
 
 function parentSettingsView() {
-  const parent = loadAccount() || state.parent || initialParent;
-  const subscription = getSubscription(parent);
-  const flashMessage = state.flash;
-  state.flash = "";
   return `
     <section class="screen home-screen">
-      ${parentHeader("設定")}
-      <div class="page-heading">
-        <div>
-          <h1>設定</h1>
-          <p>アカウントと保存設定を確認できます。</p>
-        </div>
+      ${parentSettingsHeader("設定")}
+
+      <div class="settings-menu">
+        ${settingsMenuButton("ボーナス設定", "/parent/monthly-bonus")}
+        ${settingsMenuButton("子ども管理", "/parent/children")}
+        ${settingsMenuButton("プラン・支払い設定", "/parent/billing")}
+        ${settingsMenuButton("メールアドレス設定", "/parent/settings/email")}
+        ${settingsMenuButton("パスワード変更", "/parent/settings/password")}
+        ${settingsMenuButton("ログアウト", "/parent/settings/logout")}
+        ${settingsMenuButton("退会", "/parent/settings/cancel", true)}
+        ${settingsMenuButton("デモの使い方", "/parent/demo-guide", false, "本番では非表示")}
+        ${settingsMenuButton("クラウド情報", "/parent/settings/cloud", false, "本番では非表示")}
+        ${settingsMenuButton("データ管理", "/parent/settings/data", true, "本番では非表示")}
       </div>
 
+      ${bottomNav("settings")}
+    </section>
+  `;
+}
+
+function settingsMenuButton(label, route, danger = false, note = "") {
+  return `
+    <button class="card settings-menu-link ${danger ? "danger-zone" : ""}" type="button" data-route="${route}">
+      <span>${label}</span>
+      ${note ? `<small>${note}</small>` : ""}
+      ${studyPayIcon("chevron-right", "settings-menu-chevron")}
+    </button>
+  `;
+}
+
+function parentEmailSettingsView() {
+  const parent = loadAccount() || state.parent || initialParent;
+  return parentSettingsDetailView(
+    "メールアドレス設定",
+    `
       <div class="card detail-card">
-        <span class="summary-kicker">アカウント</span>
         <dl class="info-list">
-          <div><dt>ニックネーム</dt><dd>${escapeHtml(parent.nickname || "-")}</dd></div>
-          <div><dt>メール</dt><dd>${escapeHtml(parent.email || "-")}</dd></div>
-          <div><dt>契約状態</dt><dd>${subscriptionLabel(parent.subscriptionStatus)}</dd></div>
-          <div><dt>プラン</dt><dd>${planLabel(subscription.plan)}</dd></div>
-          <div><dt>次回更新</dt><dd>${formatDate(subscription.nextBillingAt)}</dd></div>
+          <div><dt>現在のメール</dt><dd>${escapeHtml(parent.email || "-")}</dd></div>
         </dl>
-        <button class="secondary-button compact-button" type="button" data-route="/parent/billing">プラン・支払い設定</button>
+        <p class="card-copy">メールアドレス変更は本番認証と接続後に利用できます。</p>
       </div>
+    `,
+  );
+}
 
+function parentPasswordSettingsView() {
+  return parentSettingsDetailView(
+    "パスワード変更",
+    `
       <div class="card detail-card">
-        <span class="summary-kicker">MVP検証</span>
-        <p class="card-copy">デモデータを使って、親子の申請・承認・おこづかい申請の流れを順番に確認できます。</p>
-        <button class="primary-button compact-button" type="button" data-route="/parent/demo-guide">デモの使い方を見る</button>
+        <p class="card-copy">パスワード変更は本番認証と接続後に利用できます。</p>
       </div>
+    `,
+  );
+}
 
+function parentLogoutSettingsView() {
+  return parentSettingsDetailView(
+    "ログアウト",
+    `
       <div class="card detail-card">
-        <span class="summary-kicker">写真保存</span>
-        <p class="card-copy">承認済み写真は60日、やり直し・却下写真は30日を過ぎるとアプリ内から自動削除されます。</p>
+        <p class="card-copy">この端末の保護者ログインを終了します。</p>
+        <button class="secondary-button compact-button" type="button" id="logout-button">ログアウト</button>
       </div>
+    `,
+  );
+}
 
+function parentCancelSettingsView() {
+  return parentSettingsDetailView(
+    "退会",
+    `
+      <div class="card detail-card danger-zone">
+        <p class="card-copy">退会処理は本番の認証・課金連携後に有効化します。</p>
+        <button class="danger-button compact-button" type="button" disabled>本番実装後に利用可能</button>
+      </div>
+    `,
+  );
+}
+
+function parentCloudSettingsView() {
+  return parentSettingsDetailView(
+    "クラウド情報",
+    `
       <div class="card detail-card">
-        <span class="summary-kicker">クラウド保存</span>
         <dl class="info-list">
           <div><dt>保存方式</dt><dd>${cloudStorageLabel()}</dd></div>
           <div><dt>同期状態</dt><dd>${cloudSyncStatusLabel()}</dd></div>
@@ -880,16 +916,18 @@ function parentSettingsView() {
         ${cloudState.error ? `<p class="form-error">${escapeHtml(cloudState.error)}</p>` : ""}
         <p class="card-copy">Supabase無料プランの接続情報をVercel環境変数に入れると、親子データをクラウドに同期します。</p>
       </div>
+    `,
+  );
+}
 
-      <div class="card detail-card">
-        <span class="summary-kicker">通知</span>
-        <p class="card-copy">申請やおこづかいの動きをアプリ内通知で確認できます。</p>
-        <button class="secondary-button compact-button" type="button" data-route="/parent/notifications">通知を見る</button>
-      </div>
-
+function parentDataSettingsView() {
+  const flashMessage = state.flash;
+  state.flash = "";
+  return parentSettingsDetailView(
+    "データ管理",
+    `
       <div class="card detail-card danger-zone">
         ${flashMessage ? `<div class="success">${escapeHtml(flashMessage)}</div>` : ""}
-        <span class="summary-kicker">データ管理</span>
         <p class="card-copy">MVP検証用に、この端末に保存されているデータをバックアップできます。初期化すると登録情報・子ども・申請・通知が消えます。</p>
         <button class="primary-button compact-button" type="button" id="create-demo-data">デモデータを作成</button>
         <button class="secondary-button compact-button" type="button" id="export-prototype-data">データを書き出す</button>
@@ -903,6 +941,16 @@ function parentSettingsView() {
           </div>
         </div>
       </div>
+    `,
+  );
+}
+
+function parentSettingsDetailView(title, content) {
+  return `
+    <section class="screen home-screen">
+      ${parentSettingsHeader(title)}
+
+      ${content}
 
       ${bottomNav("settings")}
     </section>
@@ -913,13 +961,9 @@ function parentDemoGuideView() {
   const demoChild = findDemoChild();
   return `
     <section class="screen home-screen">
-      ${parentHeader("デモ")}
-      <div class="page-heading">
-        <div>
-          <h1>デモの使い方</h1>
-          <p>この順番で触ると、MVPの中心体験を確認できます。</p>
-        </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent/settings">設定</button>
+      ${parentSettingsHeader("デモの使い方")}
+      <div class="page-heading settings-page-heading">
+        <p>この順番で触ると、MVPの中心体験を確認できます。</p>
       </div>
 
       ${
@@ -980,13 +1024,9 @@ function parentBillingView() {
   state.flash = "";
   return `
     <section class="screen home-screen">
-      ${parentHeader("支払い")}
-      <div class="page-heading">
-        <div>
-          <h1>プラン・支払い設定</h1>
-          <p>本番決済前の動作確認用です。</p>
-        </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent/settings">設定</button>
+      ${parentSettingsHeader("プラン・支払い設定")}
+      <div class="page-heading settings-page-heading">
+        <p>本番決済前の動作確認用です。</p>
       </div>
 
       <div class="card summary-card">
@@ -1021,10 +1061,6 @@ function parentSubscriptionRequiredView(subscription) {
     <section class="screen home-screen">
       ${parentHeader("契約確認")}
       <div class="card empty-state">
-        <div class="small-cat" aria-label="イメージキャラクター" role="img">
-          <span class="small-cat-ears"></span>
-          <span class="small-cat-face"></span>
-        </div>
         <strong>契約状態の確認が必要です</strong>
         <p>現在の状態は「${subscriptionLabel(subscription.status)}」です。プラン・支払い設定を確認してください。</p>
         <button class="primary-button" type="button" data-route="/parent/billing">支払い設定へ</button>
@@ -1039,10 +1075,6 @@ function childSubscriptionBlockedView(subscription) {
     <section class="screen home-screen child-theme">
       ${childHeader("利用確認")}
       <div class="card empty-state">
-        <div class="small-cat" aria-label="イメージキャラクター" role="img">
-          <span class="small-cat-ears"></span>
-          <span class="small-cat-face"></span>
-        </div>
         <strong>いまは利用できません</strong>
         <p>保護者の契約状態が「${subscriptionLabel(subscription.status)}」のため、保護者に確認してください。</p>
       </div>
@@ -1070,19 +1102,15 @@ function parentApplicationsView() {
   const pendingItems = items.filter((item) => item.application.status === "pending");
   return `
     <section class="screen home-screen">
-      ${parentHeader("申請")}
-      <div class="page-heading">
-        <div>
-          <h1>申請一覧</h1>
-          <p>確認待ち ${pendingItems.length} 件</p>
-        </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent">ホーム</button>
+      ${parentPlainHeader("申請一覧")}
+      <div class="page-heading settings-page-heading">
+        <p>確認待ち ${pendingItems.length} 件</p>
       </div>
 
       <div class="application-list">
         ${
           items.length === 0
-            ? `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>申請はまだありません</strong><p>子どもから申請されるとここに表示されます。</p></div>`
+            ? `<div class="card empty-state"><strong>申請はまだありません</strong><p>子どもから申請されるとここに表示されます。</p></div>`
             : items.map(({ child, application }) => parentApplicationCard(child, application)).join("")
         }
       </div>
@@ -1356,13 +1384,9 @@ function parentRedemptionsView() {
   const paidAllowanceTotal = getParentMonthlyAllowanceTotal();
   return `
     <section class="screen home-screen">
-      ${parentHeader("おこづかい")}
-      <div class="page-heading">
-        <div>
-          <h1>おこづかい申請一覧</h1>
-          <p>確認待ち ${pendingItems.length} 件</p>
-        </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent">ホーム</button>
+      ${parentPlainHeader("おこづかい申請一覧")}
+      <div class="page-heading settings-page-heading">
+        <p>確認待ち ${pendingItems.length} 件</p>
       </div>
 
       <div class="card summary-card">
@@ -1373,7 +1397,7 @@ function parentRedemptionsView() {
       <div class="application-list">
         ${
           items.length === 0
-            ? `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>おこづかい申請はまだありません</strong><p>子どもから申請されるとここに表示されます。</p></div>`
+            ? `<div class="card empty-state"><strong>おこづかい申請はまだありません</strong><p>子どもから申請されるとここに表示されます。</p></div>`
             : items.map(({ child, redemption }) => parentRedemptionCard(child, redemption)).join("")
         }
       </div>
@@ -1429,10 +1453,6 @@ function parentMonthlyBonusView() {
                 <div>
                   <span class="summary-kicker">今月の確認</span>
                   <h2>${escapeHtml(selectedChild?.nickname || "子ども")}への追加ポイント</h2>
-                </div>
-                <div class="small-cat overview-cat" aria-label="イメージキャラクター" role="img">
-                  <span class="small-cat-ears"></span>
-                  <span class="small-cat-face"></span>
                 </div>
               </div>
               <div class="field">
@@ -1548,7 +1568,7 @@ function monthlyBonusReferenceCard(reference, basePoints) {
 function monthlyBonusList(child) {
   const bonuses = getChildMonthlyBonuses(child);
   if (!bonuses.length) {
-    return `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>月次ボーナス履歴はまだありません</strong><p>付与するとここに表示されます。</p></div>`;
+    return `<div class="card empty-state"><strong>月次ボーナス履歴はまだありません</strong><p>付与するとここに表示されます。</p></div>`;
   }
 
   return bonuses.map(monthlyBonusCard).join("");
@@ -1648,10 +1668,6 @@ function childrenPreview(children) {
   if (children.length === 0) {
     return `
       <div class="card empty-state">
-        <div class="small-cat" aria-label="イメージキャラクター" role="img">
-          <span class="small-cat-ears"></span>
-          <span class="small-cat-face"></span>
-        </div>
         <div>
           <strong>まだ子どもが登録されていません</strong>
           <p>子どもを追加すると、ポイント残高やログイン情報をここから確認できます。</p>
@@ -1672,16 +1688,10 @@ function childrenView() {
   const canAdd = children.length < MAX_CHILDREN;
   return `
     <section class="screen home-screen">
-      ${parentHeader("子ども")}
-      <div class="page-heading">
-        <div>
-          <h1>子ども一覧</h1>
-          <p>${children.length} / ${MAX_CHILDREN}人を登録中</p>
-        </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent">ホーム</button>
+      ${parentSettingsHeader("子ども管理")}
+      <div class="page-heading children-page-heading">
+        <p>お子様は最大３名まで登録できます。</p>
       </div>
-
-      ${canAdd ? `<button class="primary-button" type="button" data-route="/parent/children/new">子どもを追加する</button>` : `<div class="notice-card">登録できる子どもは最大${MAX_CHILDREN}人です。</div>`}
 
       <div class="child-list section-tight">
         ${
@@ -1690,6 +1700,8 @@ function childrenView() {
             : children.map((child) => childCard(child)).join("")
         }
       </div>
+
+      ${canAdd ? `<button class="primary-button children-add-button" type="button" data-route="/parent/children/new">子どもを追加する</button>` : `<div class="notice-card">登録できる子どもは最大${MAX_CHILDREN}人です。</div>`}
 
       ${bottomNav("children")}
     </section>
@@ -2036,15 +2048,26 @@ function notFoundView() {
     <section class="screen home-screen">
       ${parentHeader("子ども")}
       <div class="card empty-state">
-        <div class="small-cat" aria-label="イメージキャラクター" role="img">
-          <span class="small-cat-ears"></span>
-          <span class="small-cat-face"></span>
-        </div>
         <strong>子ども情報が見つかりません</strong>
         <button class="primary-button" type="button" data-route="/parent/children">一覧に戻る</button>
       </div>
       ${bottomNav("children")}
     </section>
+  `;
+}
+
+function parentSettingsHeader(title) {
+  return parentPlainHeader(title, "/parent/settings", "設定に戻る");
+}
+
+function parentPlainHeader(title, backRoute = "/parent", backLabel = "ホームに戻る") {
+  return `
+    <div class="topbar parent-settings-topbar">
+      <button class="settings-header-back" type="button" data-route="${backRoute}" aria-label="${escapeHtml(backLabel)}">
+        ${studyPayIcon("chevron-left", "settings-header-back-icon")}
+      </button>
+      <h1>${escapeHtml(title)}</h1>
+    </div>
   `;
 }
 
@@ -2076,10 +2099,6 @@ function childCard(child) {
 function emptyChildren() {
   return `
     <div class="card empty-state">
-      <div class="small-cat" aria-label="イメージキャラクター" role="img">
-        <span class="small-cat-ears"></span>
-        <span class="small-cat-face"></span>
-      </div>
       <div>
         <strong>子どもを追加しましょう</strong>
         <p>追加後に、子ども用のログインIDとパスワードを確認できます。</p>
@@ -2119,10 +2138,6 @@ function childHomeView(child) {
             <strong>${pendingCount}件</strong>
           </div>
         </div>
-        <div class="small-cat child-points-cat" aria-label="イメージキャラクター" role="img">
-          <span class="small-cat-ears"></span>
-          <span class="small-cat-face"></span>
-        </div>
       </div>
 
       <section class="child-section">
@@ -2134,7 +2149,7 @@ function childHomeView(child) {
           ${
             recentApplications.length
               ? recentApplications.map(childRecentActivityCard).join("")
-              : `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
+              : `<div class="card empty-state"><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
           }
         </div>
       </section>
@@ -2436,7 +2451,7 @@ function childHistoryView(child) {
       <div class="application-list">
         ${
           applications.length === 0
-            ? `<div class="card empty-state"><div class="small-cat" aria-label="イメージキャラクター" role="img"><span class="small-cat-ears"></span><span class="small-cat-face"></span></div><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
+            ? `<div class="card empty-state"><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
             : filteredApplications.length === 0
               ? `<div class="card empty-state"><strong>この状態の履歴はありません</strong><p>別の状態を選んで確認できます。</p></div>`
               : filteredApplications.map(applicationCard).join("")
@@ -2711,21 +2726,26 @@ function childBottomNav(active) {
 }
 
 function bottomNav(active) {
+  const activeKey = active === "children" ? "settings" : active;
+  const parent = loadAccount() || state.parent || initialParent;
+  const requestCount = getParentApplications().filter((item) => item.application.status === "pending").length;
+  const redemptionCount = getParentRedemptions().filter((item) => item.redemption.status === "pending").length;
+  const notificationCount = getUnreadNotifications(parent).length;
   const items = [
-    ["home", "⌂", "ホーム", "/parent"],
-    ["requests", "□", "申請", "/parent/applications"],
-    ["children", "+", "子ども", "/parent/children"],
-    ["redemptions", "¥", "おこづかい", "/parent/redemptions"],
-    ["settings", "⚙", "設定", "/parent/settings"],
+    ["home", studyPayIcon("house", "nav-lucide-icon"), "ホーム", "/parent", 0],
+    ["requests", studyPayIcon("laugh", "nav-lucide-icon"), "やった！", "/parent/applications", requestCount],
+    ["redemptions", studyPayIcon("hand-coins", "nav-lucide-icon"), "おこづかい", "/parent/redemptions", redemptionCount],
+    ["notifications", studyPayIcon("bell", "nav-lucide-icon"), "通知", "/parent/notifications", notificationCount],
+    ["settings", studyPayIcon("settings", "nav-lucide-icon"), "設定", "/parent/settings", 0],
   ];
 
   return `
     <nav class="bottom-nav" aria-label="保護者メニュー">
       ${items
         .map(
-          ([key, icon, label, path]) => `
-            <button class="nav-item ${active === key ? "active" : ""}" type="button" data-route="${path}" aria-current="${active === key ? "page" : "false"}">
-              <span class="nav-icon">${icon}</span>
+          ([key, icon, label, path, badgeCount]) => `
+            <button class="nav-item ${activeKey === key ? "active" : ""}" type="button" data-route="${path}" aria-current="${activeKey === key ? "page" : "false"}">
+              <span class="nav-icon">${icon}${navBadge(badgeCount)}</span>
               <span>${label}</span>
             </button>
           `,
@@ -2733,6 +2753,15 @@ function bottomNav(active) {
         .join("")}
     </nav>
   `;
+}
+
+function navBadge(count) {
+  const normalizedCount = Number(count || 0);
+  if (normalizedCount <= 0) {
+    return "";
+  }
+
+  return `<span class="nav-badge">${normalizedCount > 99 ? "99+" : normalizedCount}</span>`;
 }
 
 function bindLp() {
@@ -5188,6 +5217,14 @@ function subscriptionSummary(subscription) {
   return `${subscriptionLabel(subscription.status)} / 支払い設定を確認してください`;
 }
 
+function parentHomeSubscriptionSummary(subscription) {
+  if (subscription.status === "trial") {
+    return `無料トライアル中 ${formatJapaneseDate(subscription.trialEndsAt)}まで`;
+  }
+
+  return subscriptionSummary(subscription);
+}
+
 function planLabel(plan) {
   return PLAN_OPTIONS[plan]?.label || plan || "-";
 }
@@ -5219,6 +5256,19 @@ function formatDate(value) {
   }
 
   return new Date(value).toLocaleDateString("ja-JP");
+}
+
+function formatJapaneseDate(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
 function formatDateTime(value) {
@@ -5271,6 +5321,12 @@ function studyPayIcon(name, className = "") {
   }
 
   const fallbackIcons = {
+    bell: `
+      <path d="M10.268 21a2 2 0 0 0 3.464 0"/>
+      <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.674C19.41 13.956 18 12.499 18 8a6 6 0 0 0-12 0c0 4.499-1.411 5.956-2.738 7.326"/>
+    `,
+    "chevron-left": `<path d="m15 18-6-6 6-6"/>`,
+    "chevron-right": `<path d="m9 18 6-6-6-6"/>`,
     "circle-alert": `
       <circle cx="12" cy="12" r="10"/>
       <line x1="12" x2="12" y1="8" y2="12"/>
@@ -5284,9 +5340,39 @@ function studyPayIcon(name, className = "") {
       <circle cx="12" cy="12" r="10"/>
       <polyline points="12 6 12 12 16 14"/>
     `,
+    "circle-user-round": `
+      <path d="M18 20a6 6 0 0 0-12 0"/>
+      <circle cx="12" cy="10" r="4"/>
+      <circle cx="12" cy="12" r="10"/>
+    `,
+    "hand-coins": `
+      <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"/>
+      <path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/>
+      <path d="m2 16 6 6"/>
+      <circle cx="16" cy="9" r="2.9"/>
+      <circle cx="6" cy="5" r="3"/>
+    `,
+    house: `
+      <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/>
+      <path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+    `,
+    laugh: `
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M18 13a6 6 0 0 1-12 0h12Z"/>
+      <line x1="9" x2="9.01" y1="9" y2="9"/>
+      <line x1="15" x2="15.01" y1="9" y2="9"/>
+    `,
+    settings: `
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    `,
     "square-pen": `
       <path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
       <path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/>
+    `,
+    "square-check-big": `
+      <path d="M21 10.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.5"/>
+      <path d="m9 11 3 3L22 4"/>
     `,
   };
   if (fallbackIcons[name]) {

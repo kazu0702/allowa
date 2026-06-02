@@ -1,0 +1,235 @@
+<!DOCTYPE html><html lang="ja" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
+<title>StudyPay - 子ども用ホーム</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .custom-shadow {
+            box-shadow: 0 4px 20px rgba(255, 128, 0, 0.08);
+        }
+        .header-gradient {
+            background: linear-gradient(180deg, #FFF4E6 0%, #FFF8F1 100%);
+        }
+        .main-cta-shadow {
+            box-shadow: 0 12px 32px rgba(255, 128, 0, 0.25);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#964900",
+                        "primary-container": "#ff8000",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#5e2b00",
+                        "primary-fixed": "#ffdcc7",
+                        "primary-fixed-dim": "#ffb787",
+                        "secondary": "#845400",
+                        "secondary-container": "#feb246",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-container": "#6f4600",
+                        "secondary-fixed": "#ffddb6",
+                        "secondary-fixed-dim": "#ffb95a",
+                        "tertiary": "#7b5800",
+                        "tertiary-container": "#d29a00",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-container": "#4c3600",
+                        "background": "#fbf9f8",
+                        "on-background": "#1b1c1c",
+                        "surface": "#fbf9f8",
+                        "on-surface": "#1b1c1c",
+                        "surface-variant": "#e4e2e1",
+                        "on-surface-variant": "#574235",
+                        "outline": "#8b7263",
+                        "outline-variant": "#dfc1af",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#f6f3f2",
+                        "surface-container": "#f0eded",
+                        "surface-container-high": "#eae8e7",
+                        "surface-container-highest": "#e4e2e1"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "2xl": "1.5rem",
+                        "3xl": "2rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "sm": "12px",
+                        "base": "8px",
+                        "md": "24px",
+                        "lg": "32px",
+                        "xl": "48px",
+                        "gutter": "16px",
+                        "container-padding-mobile": "20px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "headline-sm": ["Plus Jakarta Sans"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface min-h-screen pb-32">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-gutter h-16 shadow-[0_4px_20px_rgba(255,128,0,0.08)] bg-white">
+<div class="flex items-center gap-3"><img alt="StudyPay" class="w-auto h-10" src="https://lh3.googleusercontent.com/aida-public/AB6AXuByYnH6vTlB0xzItvkapJh32Yv2w2SsyoUbVEmLlDpXLJG29xxDkS0sIK96LHOHR6nrazn3ptrhrNXBPfuoFDeKD9GPOZvuUsP1TPVjX72Ko2OApIz3mUam0jXAGPbOcdUZzmedr4WfTnhAvF1AhQAYUcsqrzlyp9LsMFESE8WOCn6bXL2bDGrHA8PSGTpwPL9JVHgJVbaVgkqOMU4lCk9Uq-GlCV7sfiL4QR1bMivkbhr01QtLpGQtZPX5QdnaebQ0YzOEeDMxGAI"></div>
+<div class="flex items-center gap-2 px-2 py-1 rounded-full px-0"><span class="material-symbols-outlined text-primary text-[24px]">account_circle</span><span class="font-label-md text-[14px] font-bold text-on-surface">タロー</span></div>
+</header>
+<main class="pt-16 max-w-md mx-auto">
+<!-- Greeting Section (Header Area) -->
+<div class="px-container-padding-mobile mt-4">
+<!-- Points & Progress Card -->
+<div class="bg-gradient-to-br from-primary-container to-secondary-container rounded-[24px] p-6 text-on-primary shadow-lg relative overflow-hidden mb-lg">
+<!-- Abstract patterns for texture -->
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+<div class="absolute -left-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+<div class="flex justify-between items-center">
+<div>
+<p class="font-label-md text-label-md opacity-90 mb-1">現在の総保有ポイント</p>
+<div class="flex items-baseline gap-2">
+<span class="font-headline-lg text-[44px] leading-tight tracking-tight font-extrabold">1,250</span>
+<span class="font-headline-sm text-headline-sm">pts</span>
+</div>
+</div>
+<button class="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white border border-white/40 rounded-full px-4 py-1.5 text-sm font-bold active:scale-95 transition-transform">
+      交換する
+    </button>
+</div>
+<div class="mt-4 flex gap-3 relative z-10">
+<div class="bg-white/20 backdrop-blur-md rounded-xl px-3 py-2 flex-1">
+<p class="text-[10px] uppercase font-bold opacity-80">今月の獲得</p>
+<p class="font-label-md text-label-md">+450 pts</p>
+</div>
+<div class="bg-white/20 backdrop-blur-md rounded-xl px-3 py-2 flex-1">
+<p class="text-[10px] uppercase font-bold opacity-80">承認待ち</p>
+<p class="font-label-md text-label-md">150 pts</p>
+</div>
+</div>
+</div>
+<!-- Main CTA (Large Action Button) -->
+<!-- Recent Activity -->
+<section class="mb-lg">
+<div class="flex justify-between items-center mb-md">
+<h2 class="font-headline-sm text-on-surface">最近のやったこと</h2>
+<button class="text-primary font-label-md hover:underline font-bold">すべて見る</button>
+</div>
+<div class="space-y-sm">
+<!-- Activity Item: Pending -->
+<div class="flex items-center gap-md bg-white p-sm rounded-2xl custom-shadow transition-transform active:scale-[0.98] border border-transparent">
+<div class="w-16 h-16 bg-surface-container rounded-xl overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDX4iuX8VFgZtoZ52Sm9i0btSk4UYvo-iGIdVTcfFZgY36Jqa6MHkf-lR60Gqf9aFOLOZknzjve3nQYDQi1JKS1ShV7g6UVTgAamifPxJT2-Ow2t-jAqDyH7QbBVfe0r0YGdQIrhkWfDU1utYmFl82du5PG6A8mUYrsA_0OFNIxfYNt4aUHN5wAlPBlvqRmnrVlgyPBZkTiNCoD5ifCZDegcCj_0QqB2Gdfg0Q4DMcxjj9NyOVXlcGFQX-0xLjti6M7M5_1zZiWma8">
+</div>
+<div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1"><h3 class="font-label-md text-on-surface truncate">算数のテスト</h3></div><div class="flex items-center gap-2"><span class="px-2 py-0.5 bg-primary-fixed text-on-primary-fixed-variant rounded-full text-[10px] font-bold flex-shrink-0">テスト</span><p class="font-label-sm text-on-surface-variant">今日 14:30</p></div></div>
+<div class="flex flex-col items-end gap-1.5">
+<span class="px-2.5 py-0.5 bg-surface-container-highest text-on-surface-variant rounded-full text-[10px] font-bold">確認中</span>
+<span class="font-label-md text-primary font-bold">+50 pts</span>
+</div>
+</div>
+<!-- Activity Item: Approved -->
+<div class="flex items-center gap-md bg-white p-sm rounded-2xl custom-shadow transition-transform active:scale-[0.98]">
+<div class="w-16 h-16 bg-surface-container rounded-xl overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuChI205vgtC1irnMe8F0y7lPx2dxobpj5lKBC95O8KIumoRma15HcupY8nPSk-UHwRK3FF3hScMvqRM5GC5Z78FrI-wuI6rKwBoJRXAhZOlnlHLhaHLXkAoPDyHSIvlzEopWk7jdmpSASYYHP-r0Vt-EbKyC3fvXHYofOHLrcBsAlbDuwjzId0bK9LBBLRCVeuACZIY9YVuXX2RqkPI1Bt_iUbxTJaHb2QuDIGLYgDigcd_PcCWxohQhaCV4oD0qAN9-TjtKaWmjFc">
+</div>
+<div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1"><h3 class="font-label-md text-on-surface truncate">1学期のあゆみ</h3></div><div class="flex items-center gap-2"><span class="px-2 py-0.5 bg-secondary-fixed text-on-secondary-fixed-variant rounded-full text-[10px] font-bold flex-shrink-0">成績表</span><p class="font-label-sm text-on-surface-variant">昨日 17:15</p></div></div>
+<div class="flex flex-col items-end gap-1.5">
+<div class="flex items-center gap-0.5 px-2.5 py-0.5 bg-green-50 text-green-700 rounded-full text-[10px] font-bold">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'wght' 700;">check_circle</span>
+<span class="">完了</span>
+</div>
+<span class="font-label-md text-primary font-bold">+20 pts</span>
+</div>
+</div>
+<!-- Activity Item: Rejected/Redo -->
+<div class="flex items-center gap-md bg-white p-sm rounded-2xl custom-shadow transition-transform active:scale-[0.98]">
+<div class="w-16 h-16 bg-surface-container rounded-xl overflow-hidden flex-shrink-0 relative">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGP7J4vhHh1J8g1YqRP57ESDNCZ3K0PWVXqui8VX__EU1dzmrdp8uBFw_WE0UbgOennll5i6jcCrFlJSGNsqzcKrQJNpEEkIX5ttIY-kSMlug8s0BTj55f8-Z0utnpvOxdkmjjr0ixi1XUsfh0Y8t7DNopuwGeK8y8VDUeHnCfjd0Nah6s6nep8jnt0iiOmckb06AkWi7G5mXZNmv20xGMWvyaLYohmqVIStE69XcMwqwp9dP7SisVF_OlUMoSFbUyMyeuiYszN0E">
+<div class="absolute inset-0 bg-error/10"></div>
+</div>
+<div class="flex-1 min-w-0"><div class="flex items-center gap-2 mb-1"><h3 class="font-label-md text-on-surface truncate">部屋のそうじ</h3></div><div class="flex items-center gap-2"><span class="px-2 py-0.5 bg-surface-container-highest text-on-surface-variant rounded-full text-[10px] font-bold flex-shrink-0">その他</span><p class="font-label-sm text-on-surface-variant">昨日 10:00</p></div></div>
+<div class="flex flex-col items-end gap-1.5">
+<div class="flex items-center gap-0.5 px-2.5 py-0.5 bg-error-container text-error rounded-full text-[10px] font-bold">
+<span class="material-symbols-outlined text-[12px]" style="font-variation-settings: 'wght' 700;">info</span>
+<span class="">やり直し</span>
+</div>
+<span class="font-label-md text-outline font-bold">+0 pts</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Motivation/Tips Card -->
+<section class="mb-lg">
+<div class="bg-secondary-fixed/20 border border-secondary-fixed/40 rounded-3xl p-md flex items-start gap-md">
+<div class="bg-white p-2 rounded-2xl">
+<span class="material-symbols-outlined text-secondary text-[32px]" style="font-variation-settings: 'FILL' 1;">lightbulb</span>
+</div>
+<div>
+<h4 class="font-label-md text-secondary font-bold mb-1">やる気が出るヒント！</h4>
+<p class="font-body-md text-[14px] leading-relaxed text-on-secondary-fixed-variant">
+                        「お手伝い」を自分から見つけてやってみよう！写真をとるのをわすれずにね。ポイントアップ中だよ！
+                    </p>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex items-center justify-between px-4 py-3 pb-safe bg-white shadow-[0_-4px_20px_rgba(255,128,0,0.08)] rounded-t-3xl">
+<a class="flex-1 flex flex-col items-center justify-center text-primary-container active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-bold text-[12px]">ホーム&nbsp;</span>
+</a>
+<a class="flex-1 flex flex-col items-center justify-center text-on-surface-variant/60 py-1 hover:bg-primary/5 transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">history</span>
+<span class="text-[12px]">りれき&nbsp;</span>
+</a>
+<div class="flex-shrink-0 -mt-8 relative">
+<button class="w-16 h-16 bg-primary-container text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-transform duration-200">
+<span class="material-symbols-outlined text-[32px]" style="font-variation-settings: 'wght' 600;">add</span>
+</button>
+</div>
+<a class="flex-1 flex flex-col items-center justify-center text-on-surface-variant/60 py-1 hover:bg-primary/5 transition-all active:scale-90 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="text-[12px]">設定&nbsp;</span>
+</a>
+
+</nav>
+<script>
+    // Animate the progress bar on load
+    window.addEventListener('DOMContentLoaded', () => {
+        const bar = document.getElementById('progress-bar');
+        setTimeout(() => {
+            bar.style.width = '75%';
+        }, 400);
+    });
+
+    // Tap feedback for buttons
+    document.querySelectorAll('button, a').forEach(el => {
+        el.addEventListener('touchstart', () => el.classList.add('opacity-80'));
+        el.addEventListener('touchend', () => el.classList.remove('opacity-80'));
+    });
+</script>
+
+
+</body></html>

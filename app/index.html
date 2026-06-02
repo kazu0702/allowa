@@ -8,20 +8,51 @@
       name="description"
       content="がんばった成績を、おこづかいに。親子で学習成果を申請・承認・ポイント化できるスマホ向けアプリ。"
     />
-    <link rel="stylesheet" href="./styles.css?v=phase95" />
+    <link rel="stylesheet" href="./styles.css?v=phase123" />
   </head>
   <body>
     <div class="phone-shell">
       <main id="app" class="app" aria-live="polite"></main>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./config.js?v=phase95"></script>
-    <script src="./app.js?v=phase95"></script>
-    <script src="./cloud.js?v=phase95"></script>
-    <script src="./monthly-bonus.js?v=phase95"></script>
-    <script src="./lucide-icons.js?v=phase95"></script>
-    <script src="./child-design.js?v=phase95"></script>
-    <script src="./child-design-fix.js?v=phase95"></script>
-    <script src="./child-plus-fix.js?v=phase95"></script>
+    <script src="./config.js?v=phase123"></script>
+    <script src="./app.js?v=phase123"></script>
+    <script src="./cloud.js?v=phase123"></script>
+    <script src="./monthly-bonus.js?v=phase123"></script>
+    <script src="./lucide-icons.js?v=phase123"></script>
+    <script src="./child-design.js?v=phase123"></script>
+    <script src="./child-design-fix.js?v=phase123"></script>
+    <script src="./child-plus-fix.js?v=phase123"></script>
+    <style>
+      .child-apply-design {
+        padding-bottom: 32px !important;
+      }
+    </style>
+    <script>
+      (() => {
+        const removeApplyNav = () => {
+          const route = location.hash.replace("#", "") || "/";
+          if (!route.startsWith("/child/apply") && !route.startsWith("/child/reapply")) {
+            return;
+          }
+          document
+            .querySelector('#app nav[aria-label="子どもメニュー"], #app .bottom-nav, #app .child-design-nav')
+            ?.remove();
+        };
+        const scheduleRemoveApplyNav = () => {
+          window.setTimeout(removeApplyNav, 0);
+          window.setTimeout(removeApplyNav, 300);
+          window.setTimeout(removeApplyNav, 900);
+        };
+
+        window.addEventListener("hashchange", scheduleRemoveApplyNav);
+        window.addEventListener("studypay:child-rendered", scheduleRemoveApplyNav);
+        const app = document.querySelector("#app");
+        if (app) {
+          new MutationObserver(removeApplyNav).observe(app, { childList: true, subtree: true });
+        }
+        scheduleRemoveApplyNav();
+      })();
+    </script>
   </body>
 </html>
