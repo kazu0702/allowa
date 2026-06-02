@@ -17,7 +17,7 @@ await Promise.all([
   copyFile(join(root, "app", "child-design.js"), join(dist, "child-design.js")),
   copyFile(join(root, "app", "child-design-fix.js"), join(dist, "child-design-fix.js")),
   copyFile(join(root, "app", "child-plus-fix.js"), join(dist, "child-plus-fix.js")),
-  copyFile(join(root, "logo.png"), join(dist, "logo.png")),
+  copyFile(join(root, "app", "logo.png"), join(dist, "logo.png")),
   cp(join(root, "app", "characters"), join(dist, "characters"), { recursive: true }),
 ]);
 
