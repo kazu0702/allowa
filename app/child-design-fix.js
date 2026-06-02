@@ -300,7 +300,7 @@
         : "新規登録";
     screen.classList.add("child-apply-design");
     upgradeHeader(screen);
-    upgradeBottomNav(screen, "/child/apply");
+    removeBottomNav(screen);
 
     const pageHeading = screen.querySelector(".page-heading");
     if (pageHeading && !screen.querySelector(".child-apply-hero")) {
@@ -646,6 +646,10 @@
     }
 
     nav.outerHTML = bottomNav(route === "/child/history" ? "history" : route === "/child/apply" ? "apply" : "settings");
+  }
+
+  function removeBottomNav(screen) {
+    screen.querySelector('nav[aria-label="子どもメニュー"], .bottom-nav')?.remove();
   }
 
   function bottomNav(active) {
@@ -1754,7 +1758,7 @@
 
       .child-apply-design {
         min-height: 100dvh;
-        padding: 0 20px 118px;
+        padding: 0 20px 32px;
         background: #fffaf6;
       }
 
