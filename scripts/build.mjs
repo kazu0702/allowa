@@ -1,4 +1,4 @@
-import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -13,9 +13,12 @@ await Promise.all([
   copyFile(join(root, "app", "app.js"), join(dist, "app.js")),
   copyFile(join(root, "app", "cloud.js"), join(dist, "cloud.js")),
   copyFile(join(root, "app", "monthly-bonus.js"), join(dist, "monthly-bonus.js")),
+  copyFile(join(root, "app", "lucide-icons.js"), join(dist, "lucide-icons.js")),
   copyFile(join(root, "app", "child-design.js"), join(dist, "child-design.js")),
   copyFile(join(root, "app", "child-design-fix.js"), join(dist, "child-design-fix.js")),
   copyFile(join(root, "app", "child-plus-fix.js"), join(dist, "child-plus-fix.js")),
+  copyFile(join(root, "logo.png"), join(dist, "logo.png")),
+  cp(join(root, "app", "characters"), join(dist, "characters"), { recursive: true }),
 ]);
 
 const config = {
