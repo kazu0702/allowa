@@ -17,13 +17,16 @@
   );
 
   function openChildApply() {
-    if (typeof navigate === "function") {
-      navigate("/child/apply");
+    const route = "/child/apply";
+    if (typeof window.studypayForceNavigate === "function") {
+      window.studypayForceNavigate(route);
+    } else if (typeof navigate === "function") {
+      navigate(route);
     } else {
-      location.hash = "/child/apply";
+      location.hash = route;
     }
 
-    [120, 360].forEach((delay) => {
+    [0, 120, 360].forEach((delay) => {
       window.setTimeout(ensureChildApplyRendered, delay);
     });
   }
@@ -34,6 +37,10 @@
       return;
     }
 
-    location.reload();
+    if (typeof window.studypayForceNavigate === "function") {
+      window.studypayForceNavigate(route);
+    } else {
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    }
   }
 })();

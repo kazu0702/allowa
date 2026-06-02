@@ -162,8 +162,8 @@
       }
 
       return html.replace(
-        '<div class="card detail-card">\n        <span class="summary-kicker">通知</span>',
-        `${cloudCardHtml()}\n\n      <div class="card detail-card">\n        <span class="summary-kicker">通知</span>`,
+        '<div class="card detail-card">\\n        <span class="summary-kicker">通知</span>',
+        `${cloudCardHtml()}\\n\\n      <div class="card detail-card">\\n        <span class="summary-kicker">通知</span>`,
       );
     };
     window.parentSettingsView.__cloudPatched = true;

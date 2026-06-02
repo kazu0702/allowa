@@ -2,13 +2,16 @@
   const STYLE_ID = "child-design-fix-style";
   const ACCOUNT_KEY = "studypay_parent_account";
   const CHILD_SESSION_KEY = "studypay_child_session";
+  const BALANCE_CARD_BG_KEY_PREFIX = "studypay_child_balance_card_bg:";
 
   ensureStyles();
   scheduleUpgrade();
   bindDelegatedActions();
+  bindHomeBackgroundActions();
   bindLoginRedirectGuard();
 
   window.addEventListener("hashchange", scheduleUpgrade);
+  window.addEventListener("studypay:child-rendered", scheduleUpgrade);
 
   function bindDelegatedActions() {
     document.addEventListener("click", (event) => {
@@ -26,10 +29,110 @@
 
       scheduleUpgrade();
       const route = routeButton.dataset.route;
+      const childHistoryFilter = routeButton.dataset.childHistoryFilterTarget;
+      if (childHistoryFilter && typeof state !== "undefined") {
+        state.childHistoryFilter = childHistoryFilter;
+      }
       if (route && location.hash !== `#${route}`) {
-        location.hash = route;
+        goToRoute(route);
       }
     });
+  }
+
+  function bindHomeBackgroundActions() {
+    document.addEventListener("click", (event) => {
+      const backgroundButton = event.target.closest("[data-child-balance-bg-button]");
+      if (backgroundButton) {
+        toggleBalanceBackgroundMenu();
+        return;
+      }
+
+      const menuAction = event.target.closest("[data-child-balance-bg-action]");
+      if (menuAction) {
+        const action = menuAction.dataset.childBalanceBgAction;
+        handleBalanceBackgroundAction(action);
+        return;
+      }
+
+      if (!event.target.closest(".child-card-bg-controls")) {
+        closeBalanceBackgroundMenu();
+      }
+    });
+
+    document.addEventListener("change", (event) => {
+      const input = event.target.closest?.("[data-child-balance-bg-input]");
+      if (!input) {
+        return;
+      }
+
+      const file = input.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      saveBalanceCardBackground(file);
+    });
+  }
+
+  function toggleBalanceBackgroundMenu() {
+    const menu = document.querySelector("[data-child-balance-bg-menu]");
+    if (!menu) {
+      return;
+    }
+
+    menu.hidden = !menu.hidden;
+  }
+
+  function closeBalanceBackgroundMenu() {
+    const menu = document.querySelector("[data-child-balance-bg-menu]");
+    if (menu) {
+      menu.hidden = true;
+    }
+  }
+
+  function handleBalanceBackgroundAction(action) {
+    if (action === "reset") {
+      resetBalanceCardBackground();
+      closeBalanceBackgroundMenu();
+      return;
+    }
+
+    const input = document.querySelector(`[data-child-balance-bg-input="${action}"]`);
+    if (!input) {
+      return;
+    }
+
+    input.value = "";
+    input.click();
+    closeBalanceBackgroundMenu();
+  }
+
+  function goToRoute(route) {
+    if (typeof navigate === "function") {
+      navigate(route);
+    } else {
+      location.hash = route;
+    }
+
+    window.setTimeout(() => ensureRouteRendered(route), 80);
+  }
+
+  function ensureRouteRendered(route) {
+    const currentRoute = location.hash.replace("#", "") || "/";
+    if (currentRoute !== route || !route.startsWith("/child/apply")) {
+      return;
+    }
+
+    if (document.querySelector("#application-form")) {
+      scheduleUpgrade();
+      return;
+    }
+
+    if (typeof state !== "undefined" && typeof render === "function") {
+      state.route = currentRoute;
+      render();
+      scheduleUpgrade();
+    }
   }
 
   function bindLoginRedirectGuard() {
@@ -101,7 +204,16 @@
 
     const applications = getApplications(child);
     const availablePoints = getAvailablePoints(child);
+    const maxPointsPreview = isMaxPointsPreview();
+    const displayedAvailablePoints = maxPointsPreview
+      ? 999999
+      : Math.min(999999, Math.max(0, Number(availablePoints) || 0));
+    const isAvailablePointsCapped = maxPointsPreview || Number(availablePoints || 0) >= 999999;
     const monthlyEarned = getMonthlyEarned(child);
+    const balanceBackground = getBalanceCardBackground(child);
+    const balanceBackgroundStyle = balanceBackground
+      ? ` style="--child-balance-bg-image: url('${escapeStyleUrl(balanceBackground)}')"`
+      : "";
     const pendingApprovalPoints = applications
       .filter((application) => application.status === "pending")
       .reduce((total, application) => total + getApplicationPoints(application), 0);
@@ -110,49 +222,47 @@
     screen.innerHTML = `
       <header class="child-design-topbar">
         <div class="child-design-logo" aria-label="スタディペイ">
-          <span class="child-design-logo-icon" aria-hidden="true"></span>
-          <span>スタディ<span>ペイ</span></span>
+          <img class="child-design-logo-image" src="./logo.png" alt="スタディペイ" />
         </div>
-        <button class="child-design-profile" id="child-logout-button" type="button" aria-label="ログアウト">
-          <span aria-hidden="true"></span>
+        <div class="child-design-profile" aria-label="${escapeText(child.nickname || "タロー")}">
+          ${lucideIcon("circle-user-round", "child-profile-icon")}
           <strong>${escapeText(child.nickname || "タロー")}</strong>
-        </button>
+        </div>
       </header>
 
-      <section class="child-balance-card">
+      <section class="child-balance-card ${balanceBackground ? "has-custom-bg" : ""}"${balanceBackgroundStyle}>
         <div class="child-balance-copy">
-          <span>現在の総保有ポイント</span>
-          <strong>${availablePoints.toLocaleString()}<small>pts</small></strong>
+          <span>${escapeText(child.nickname || "タロー")}のポイント</span>
+          <strong><span class="child-balance-number ${isAvailablePointsCapped ? "is-capped" : ""}">${displayedAvailablePoints.toLocaleString()}</span><small>ポイント</small></strong>
         </div>
         <button class="child-exchange-button" type="button" data-route="/child/redeem">交換する</button>
         <div class="child-balance-metrics">
           <div>
             <span>今月の獲得</span>
-            <strong>+${monthlyEarned.toLocaleString()} pts</strong>
+            <strong>${monthlyEarned.toLocaleString()} <small>ポイント</small></strong>
           </div>
-          <div>
+          <button class="child-balance-metric-button" type="button" data-route="/child/history" data-child-history-filter-target="pending">
             <span>承認待ち</span>
-            <strong>${pendingApprovalPoints.toLocaleString()} pts</strong>
-          </div>
+            <strong>${pendingApprovalPoints.toLocaleString()} <small>ポイント</small></strong>
+          </button>
         </div>
       </section>
+      <div class="child-card-bg-controls">
+        <button class="child-card-bg-text-button" type="button" data-child-balance-bg-button>カードの背景を変更する</button>
+        <div class="child-card-bg-menu" data-child-balance-bg-menu hidden>
+          <button type="button" data-child-balance-bg-action="camera">写真を取る</button>
+          <button type="button" data-child-balance-bg-action="library">写真から選択</button>
+          <button type="button" data-child-balance-bg-action="reset">デフォルトに戻す</button>
+        </div>
+      </div>
+      <input class="child-card-bg-input" type="file" accept="image/*" capture="environment" data-child-balance-bg-input="camera" aria-hidden="true" tabindex="-1" />
+      <input class="child-card-bg-input" type="file" accept="image/*" data-child-balance-bg-input="library" aria-hidden="true" tabindex="-1" />
 
-      <section class="child-recent-section">
+      <section class="child-home-points-section">
         <div class="child-section-heading">
-          <h2>最近のやったこと</h2>
-          <button class="text-button child-link-button" type="button" data-route="/child/history">すべて見る</button>
+          <h2>ポイント履歴</h2>
         </div>
-        <div class="child-recent-list">
-          ${applications.slice(0, 3).map((application, index) => recentCard(application, index)).join("") || emptyRecentCard()}
-        </div>
-      </section>
-
-      <section class="child-hint-card">
-        <span class="child-hint-icon" aria-hidden="true"></span>
-        <div>
-          <h2>やる気が出るヒント！</h2>
-          <p>「お手伝い」を自分から見つけてやってみよう！写真をとるのをわすれずにね。ポイントアップ中だよ！</p>
-        </div>
+        ${homePointHistoryList(child)}
       </section>
 
       ${bottomNav("home")}
@@ -167,7 +277,12 @@
   }
 
   function upgradeApplyScreen(screen) {
-    const child = getCurrentChildData();
+    const route = location.hash.replace("#", "") || "/";
+    const title = route.startsWith("/child/reapply/")
+      ? "再申請"
+      : route.startsWith("/child/apply/")
+        ? "編集"
+        : "新規登録";
     screen.classList.add("child-apply-design");
     upgradeHeader(screen);
     upgradeBottomNav(screen, "/child/apply");
@@ -176,13 +291,16 @@
     if (pageHeading && !screen.querySelector(".child-apply-hero")) {
       pageHeading.classList.add("child-apply-hero");
       pageHeading.innerHTML = `
-        <button class="child-back-button" type="button" data-route="/child" aria-label="ホームへ戻る">‹</button>
+        <button class="child-back-button" type="button" data-route="/child" aria-label="ホームへ戻る">${lucideIcon("chevron-left", "child-back-icon")}</button>
         <div>
-          <span>新規登録</span>
-          <h1>今日のがんばり</h1>
-          <p>写真と内容を送って、保護者に確認してもらいます。</p>
+          <h1>${title}</h1>
         </div>
       `;
+    }
+
+    const heroTitle = pageHeading?.querySelector("h1");
+    if (heroTitle) {
+      heroTitle.textContent = title;
     }
 
     const form = screen.querySelector("#application-form");
@@ -193,17 +311,23 @@
     form.classList.add("child-apply-card");
     form.querySelector(".child-form-intro")?.remove();
     decorateCategoryField(form);
+    decorateFullScoreField(form);
     decoratePhotoField(form);
     decorateSubmitArea(form);
 
     const subjectLabel = form.querySelector('label[for="application-subject"]');
     if (subjectLabel) {
-      subjectLabel.textContent = "何をがんばった？";
+      subjectLabel.textContent = "教科";
+    }
+
+    const fullScoreLabel = form.querySelector('label[for="test-full-score"]');
+    if (fullScoreLabel) {
+      fullScoreLabel.textContent = "テストの満点";
     }
 
     const commentLabel = form.querySelector('label[for="child-comment"]');
     if (commentLabel) {
-      commentLabel.textContent = "ひとことメモ";
+      commentLabel.textContent = "アピールポイント";
     }
 
     const comment = form.querySelector("#child-comment");
@@ -211,33 +335,37 @@
       comment.placeholder = "がんばったところ、見てほしいところを書いてね";
     }
 
-    const firstOption = form.querySelector("#application-subject option");
-    if (firstOption && child?.subjects?.length) {
-      firstOption.selected = true;
-    }
   }
 
   function decorateCategoryField(form) {
     const categoryField = form.querySelector("#application-category")?.closest(".field");
-    if (!categoryField || categoryField.querySelector(".child-category-options")) {
+    if (!categoryField) {
+      return;
+    }
+
+    const categoryLabel = categoryField.querySelector('label[for="application-category"]');
+    if (categoryLabel) {
+      categoryLabel.textContent = "カテゴリー";
+    }
+
+    if (categoryField.querySelector(".child-category-options")) {
       return;
     }
 
     categoryField.classList.add("child-category-field");
     const select = categoryField.querySelector("#application-category");
     const options = [
-      ["test", "テスト", "点数を記録"],
-      ["grade", "成績表", "通知表や評価"],
-      ["other", "その他", "お手伝いなど"],
+      ["test", "テスト"],
+      ["grade", "成績表"],
+      ["other", "その他"],
     ];
     const optionWrap = document.createElement("div");
     optionWrap.className = "child-category-options";
     optionWrap.innerHTML = options
       .map(
-        ([value, label, copy]) => `
+        ([value, label]) => `
           <button class="child-category-option ${select.value === value ? "active" : ""}" type="button" data-category-value="${value}">
             <span>${escapeText(label)}</span>
-            <small>${escapeText(copy)}</small>
           </button>
         `,
       )
@@ -258,10 +386,63 @@
     });
   }
 
+  function decorateFullScoreField(form) {
+    const scoreField = form.querySelector("#test-full-score")?.closest(".field");
+    if (!scoreField) {
+      return;
+    }
+
+    const scoreLabel = scoreField.querySelector('label[for="test-full-score"]');
+    if (scoreLabel) {
+      scoreLabel.textContent = "テストの満点";
+    }
+
+    if (scoreField.querySelector(".child-score-options")) {
+      return;
+    }
+
+    scoreField.classList.add("child-score-field");
+    const select = scoreField.querySelector("#test-full-score");
+    const options = [
+      ["100", "100点満点"],
+      ["50", "50点満点"],
+    ];
+    const optionWrap = document.createElement("div");
+    optionWrap.className = "child-score-options";
+    optionWrap.innerHTML = options
+      .map(
+        ([value, label]) => `
+          <button class="child-category-option ${select.value === value ? "active" : ""}" type="button" data-score-value="${value}">
+            <span>${escapeText(label)}</span>
+          </button>
+        `,
+      )
+      .join("");
+    scoreField.appendChild(optionWrap);
+
+    optionWrap.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-score-value]");
+      if (!button) {
+        return;
+      }
+
+      select.value = button.dataset.scoreValue;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      optionWrap.querySelectorAll(".child-category-option").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+    });
+  }
+
   function decoratePhotoField(form) {
     const photoInput = form.querySelector("#application-photos");
     const photoField = photoInput?.closest(".field");
-    if (!photoField || photoField.querySelector(".child-photo-drop")) {
+    if (!photoField) {
+      return;
+    }
+
+    photoField.querySelector("#photo-help")?.remove();
+    if (photoField.querySelector(".child-photo-drop")) {
       return;
     }
 
@@ -269,29 +450,164 @@
     const drop = document.createElement("label");
     drop.className = "child-photo-drop";
     drop.setAttribute("for", "application-photos");
+    drop.setAttribute("aria-label", "写真を選択");
     drop.innerHTML = `
-      <span class="child-photo-icon" aria-hidden="true"></span>
-      <strong>写真を追加</strong>
-      <small>テスト・成績は1〜3枚まで</small>
+      <span class="child-photo-lucide-icon" aria-hidden="true">${lucideIcon("camera", "child-photo-svg")}</span>
     `;
     photoInput.insertAdjacentElement("afterend", drop);
-    photoInput.addEventListener("change", () => {
-      const count = photoInput.files?.length || 0;
-      drop.querySelector("small").textContent = count ? `${count}枚選択中` : "テスト・成績は1〜3枚まで";
+    drop.appendChild(photoInput);
+
+    const feedback = document.createElement("span");
+    feedback.className = "child-photo-feedback";
+    feedback.setAttribute("aria-live", "polite");
+    drop.insertAdjacentElement("afterend", feedback);
+
+    const preview = document.createElement("div");
+    preview.className = "child-photo-preview";
+    preview.setAttribute("aria-label", "選択した写真");
+    feedback.insertAdjacentElement("afterend", preview);
+
+    const routeApplication = getRouteApplication();
+    window.__studyPayExistingPhotos = [...(routeApplication?.photos || [])];
+    window.__studyPayExistingPhotoNames = [...(routeApplication?.photoNames || [])];
+    window.__studyPaySelectedPhotoFiles = [];
+    photoInput._studyPayExistingPhotos = window.__studyPayExistingPhotos;
+    photoInput._studyPayExistingPhotoNames = window.__studyPayExistingPhotoNames;
+    photoInput._studyPayFiles = window.__studyPaySelectedPhotoFiles;
+    renderPhotoPreviewState(preview, feedback, photoInput, drop);
+
+    photoInput.addEventListener("change", async () => {
+      const incomingFiles = Array.from(photoInput.files || []);
+      if (!incomingFiles.length) {
+        await renderPhotoPreviewState(preview, feedback, photoInput, drop);
+        return;
+      }
+
+      const existingCount = getExistingPhotos().length;
+      window.__studyPaySelectedPhotoFiles = [...(window.__studyPaySelectedPhotoFiles || []), ...incomingFiles].slice(
+        0,
+        Math.max(0, 3 - existingCount),
+      );
+      photoInput._studyPayFiles = window.__studyPaySelectedPhotoFiles;
+      photoInput.value = "";
+      await renderPhotoPreviewState(preview, feedback, photoInput, drop);
     });
+
+    preview.addEventListener("click", async (event) => {
+      const button = event.target.closest(".child-photo-remove-button");
+      if (!button) {
+        return;
+      }
+
+      const index = Number(button.dataset.photoIndex);
+      if (button.dataset.photoType === "existing") {
+        window.__studyPayExistingPhotos = (window.__studyPayExistingPhotos || []).filter((_, itemIndex) => itemIndex !== index);
+        window.__studyPayExistingPhotoNames = (window.__studyPayExistingPhotoNames || []).filter((_, itemIndex) => itemIndex !== index);
+        photoInput._studyPayExistingPhotos = window.__studyPayExistingPhotos;
+        photoInput._studyPayExistingPhotoNames = window.__studyPayExistingPhotoNames;
+      } else {
+        window.__studyPaySelectedPhotoFiles = (window.__studyPaySelectedPhotoFiles || []).filter((_, itemIndex) => itemIndex !== index);
+        photoInput._studyPayFiles = window.__studyPaySelectedPhotoFiles;
+      }
+
+      await renderPhotoPreviewState(preview, feedback, photoInput, drop);
+    });
+  }
+
+  async function renderPhotoPreviewState(preview, feedback, photoInput, drop) {
+    const existingPhotos = getExistingPhotos().map((photo, index) => ({ ...photo, photoType: "existing", sourceIndex: index }));
+    const selectedPhotos = await readPreviewFiles(window.__studyPaySelectedPhotoFiles || photoInput._studyPayFiles || []);
+    const photos = [...existingPhotos, ...selectedPhotos].slice(0, 3);
+    const totalCount = photos.length;
+    feedback.textContent = "";
+    renderPhotoPreview(preview, photos, totalCount < 3, photoInput, drop);
+  }
+
+  function getExistingPhotos() {
+    return Array.isArray(window.__studyPayExistingPhotos) ? window.__studyPayExistingPhotos : getRouteApplication()?.photos || [];
+  }
+
+  function getRouteApplication() {
+    const route = location.hash.replace("#", "") || "/";
+    const isEditRoute = route.startsWith("/child/apply/") || route.startsWith("/child/reapply/");
+    if (!isEditRoute) {
+      return null;
+    }
+
+    const applicationId = route.split("/").at(-1);
+    const child = getCurrentChildData();
+    return (child?.applications || []).find((application) => application.id === applicationId) || null;
+  }
+
+  function readPreviewFiles(fileList) {
+    return Promise.all(
+      Array.from(fileList)
+        .slice(0, 3)
+        .map(
+          (file) =>
+            new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve({ name: file.name, dataUrl: String(reader.result || "") });
+              reader.onerror = () => resolve(null);
+              reader.readAsDataURL(file);
+            }),
+        ),
+    ).then((photos) => photos.filter(Boolean).map((photo, index) => ({ ...photo, photoType: "selected", sourceIndex: index })));
+  }
+
+  function renderPhotoPreview(preview, photos, canAddMore = false, photoInput = null, drop = null) {
+    preview.innerHTML = photos
+      .slice(0, 3)
+      .map(
+        (photo) => `
+          <span class="child-photo-preview-item">
+            <img src="${escapeText(photo.dataUrl)}" alt="${escapeText(photo.name || "選択した写真")}" />
+            <button class="child-photo-remove-button" type="button" data-photo-type="${escapeText(photo.photoType || "selected")}" data-photo-index="${Number(photo.sourceIndex || 0)}" aria-label="写真を削除">×</button>
+          </span>
+        `,
+      )
+      .join("");
+
+    drop?.classList.toggle("is-hidden", photos.length > 0);
+
+    if (canAddMore && photos.length > 0) {
+      preview.insertAdjacentHTML(
+        "beforeend",
+        `
+          <label class="child-photo-preview-add" for="application-photos" aria-label="写真を追加">
+            ${lucideIcon("camera", "child-photo-preview-add-icon")}
+          </label>
+        `,
+      );
+      const addButton = preview.querySelector(".child-photo-preview-add");
+      if (photoInput && addButton) {
+        addButton.appendChild(photoInput);
+      }
+      return;
+    }
+
+    if (photoInput && drop) {
+      drop.appendChild(photoInput);
+    }
   }
 
   function decorateSubmitArea(form) {
     const submit = form.querySelector('button[type="submit"]');
     const cancel = Array.from(form.querySelectorAll("button")).find((button) => button.textContent.includes("キャンセル"));
-    if (!submit || form.querySelector(".child-submit-note")) {
+    const deleteButton = form.querySelector("#delete-application-from-edit");
+    if (!submit) {
       return;
     }
 
-    submit.textContent = "登録する";
+    const route = location.hash.replace("#", "") || "/";
+    submit.textContent = route.startsWith("/child/apply/") ? "変更を保存" : "送信";
+    if (form.querySelector(".child-submit-note")) {
+      return;
+    }
+
     submit.classList.add("child-submit-button");
     cancel?.classList.add("child-cancel-button");
-    submit.insertAdjacentHTML("beforebegin", `<p class="child-submit-note">送信すると、保護者の確認待ちになります。</p>`);
+    deleteButton?.classList.add("child-delete-button");
   }
 
   function upgradeHeader(screen) {
@@ -319,10 +635,9 @@
 
   function bottomNav(active) {
     const items = [
-      ["home", "home", "ホーム", "/child"],
-      ["history", "history", "りれき", "/child/history"],
+      ["home", "credit-card", "ホーム", "/child"],
       ["apply", "plus", "", "/child/apply"],
-      ["settings", "settings", "設定", "/child/points"],
+      ["history", "history", "りれき", "/child/history"],
     ];
 
     return `
@@ -331,8 +646,7 @@
           .map(
             ([key, icon, label, path]) => `
               <button class="child-design-nav-item ${key === "apply" ? "primary" : ""} ${active === key ? "active" : ""}" type="button" data-route="${path}" aria-label="${label || "申請"}">
-                <span class="nav-symbol ${icon}" aria-hidden="true"></span>
-                ${label ? `<span>${label}</span>` : ""}
+                ${lucideIcon(icon, "nav-symbol")}
               </button>
             `,
           )
@@ -341,24 +655,36 @@
     `;
   }
 
-  function recentCard(application, index) {
-    const status = statusInfo(application.status);
-    const points = getApplicationPoints(application);
+  function recentCard(application) {
+    const pointStatus = applicationPointStatus(application.status);
+    const scoreLabel = applicationScoreLabel(application);
+    const canEdit = !isApprovedApplicationStatus(application.status);
     return `
-      <button class="child-recent-card" type="button" data-route="/child/history">
-        <span class="child-thumb thumb-${index % 3}" aria-hidden="true"></span>
-        <span class="child-recent-main">
-          <strong>${escapeText(applicationTitle(application))}</strong>
-          <span>
-            <em>${escapeText(categoryLabel(application.category))}</em>
-            ${escapeText(formatActivityTime(application.submittedAt))}
-          </span>
-        </span>
-        <span class="child-recent-side">
-          <span class="child-status ${status.className}">${status.icon}${status.label}</span>
-          <strong>${points > 0 ? "+" : "+"}${points.toLocaleString()} pts</strong>
-        </span>
-      </button>
+      <div class="card application-card child-history-card child-home-history-card">
+        <div class="child-history-content">
+          ${homeApplicationMediaPreview(application)}
+          <div class="child-history-main">
+            <h2>${escapeText(applicationTitle(application))}</h2>
+            <span class="child-history-date">${escapeText(formatActivityTime(application.submittedAt))}</span>
+            <div class="child-activity-meta">
+              ${applicationCategoryChip(application)}
+            </div>
+            ${application.parentComment ? `<p class="child-parent-comment ${isRedoApplicationStatus(application.status) ? "is-redo" : ""}">${escapeText(application.parentComment)}</p>` : ""}
+          </div>
+          <div class="child-history-side">
+            <strong class="child-history-points ${pointStatus.className}">
+              ${lucideIcon(pointStatus.icon, "child-history-point-icon")}
+              <span>${applicationPointLabel(application)}</span>
+            </strong>
+            ${scoreLabel ? `<span class="child-history-score">${scoreLabel}</span>` : ""}
+            ${
+              canEdit
+                ? `<button class="child-history-edit-button" type="button" data-route="/child/apply/${escapeText(application.id)}" aria-label="申請を編集">${lucideIcon("square-pen", "child-history-edit-icon")}</button>`
+                : ""
+            }
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -376,6 +702,81 @@
         </span>
       </button>
     `;
+  }
+
+  function homePointHistoryList(child) {
+    const transactions = getPointTransactions(child).slice(0, 5);
+    return `
+      <div class="application-list section-tight child-home-point-history-list">
+        ${
+          transactions.length
+            ? transactions.map(homePointHistoryCard).join("")
+            : `<div class="card empty-state"><strong>ポイント履歴はまだありません</strong><p>申請が承認されるとここに表示されます。</p></div>`
+        }
+      </div>
+    `;
+  }
+
+  function homePointHistoryCard(transaction) {
+    const points = Number(transaction.points || 0);
+    const positive = points >= 0;
+    const tone = pointTransactionTone(transaction);
+    return `
+      <div class="card application-card point-history-card child-home-point-history-card">
+        <div class="child-home-point-history-main">
+          <h3 class="child-home-point-history-title">${escapeText(transaction.note || "ポイント履歴")}</h3>
+          <time class="child-home-point-history-date">${escapeText(formatDateTime(transaction.createdAt))}</time>
+        </div>
+        <strong class="child-home-point-history-points ${tone}">${positive ? "+" : ""}${points.toLocaleString()}pt</strong>
+        <span class="status-pill child-home-point-history-tag ${tone}">${escapeText(pointTransactionLabel(transaction.type))}</span>
+      </div>
+    `;
+  }
+
+  function getPointTransactions(child) {
+    return [...(child.pointTransactions || [])].sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+    );
+  }
+
+  function pointTransactionLabel(type) {
+    const labels = {
+      grant: "ポイント付与",
+      redemption: "おこづかい支給",
+      cancel_redemption: "支給取消",
+      cancel_grant: "承認取消",
+      adjustment: "調整",
+      monthly_bonus: "ボーナス",
+      cancel_monthly_bonus: "ボーナス取消",
+    };
+    return labels[type] || "ポイント";
+  }
+
+  function pointTransactionTone(transaction) {
+    if (transaction.status === "pending" || transaction.type === "pending") {
+      return "is-pending";
+    }
+
+    if (transaction.type === "redemption" || Number(transaction.points || 0) < 0) {
+      return "is-redemption";
+    }
+
+    return "is-grant";
+  }
+
+  function formatDateTime(value) {
+    if (!value) {
+      return "-";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "-";
+    }
+
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hours}時${minutes}分`;
   }
 
   function getCurrentChildData() {
@@ -417,6 +818,156 @@
 
   function getApplicationPoints(application) {
     return Number(application.fixedPoints ?? application.suggestedPoints ?? application.requestedPoints ?? 0);
+  }
+
+  function isMaxPointsPreview() {
+    return new URLSearchParams(location.search).get("previewMaxPoints") === "1";
+  }
+
+  function saveBalanceCardBackground(file) {
+    if (!file.type.startsWith("image/")) {
+      alert("画像ファイルを選択してください。");
+      return;
+    }
+
+    resizeBackgroundImage(file)
+      .then((dataUrl) => {
+        const child = getCurrentChildData();
+        if (!child) {
+          return;
+        }
+
+        setBalanceCardBackground(child, dataUrl);
+        scheduleUpgrade();
+      })
+      .catch(() => {
+        alert("画像を読み込めませんでした。別の画像を選択してください。");
+      });
+  }
+
+  function resizeBackgroundImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = reject;
+        image.onload = () => {
+          const maxWidth = 1200;
+          const maxHeight = 800;
+          const scale = Math.min(1, maxWidth / image.width, maxHeight / image.height);
+          const width = Math.max(1, Math.round(image.width * scale));
+          const height = Math.max(1, Math.round(image.height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          context.drawImage(image, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.84));
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function getBalanceCardBackground(child) {
+    const key = getBalanceCardBackgroundKey(child);
+    return window.localStorage?.getItem(key) || getBalanceCardBackgroundStore()[key] || "";
+  }
+
+  function getBalanceCardBackgroundKey(child) {
+    return `${BALANCE_CARD_BG_KEY_PREFIX}${child.id || child.loginId || "default"}`;
+  }
+
+  function setBalanceCardBackground(child, dataUrl) {
+    const key = getBalanceCardBackgroundKey(child);
+    getBalanceCardBackgroundStore()[key] = dataUrl;
+    try {
+      window.localStorage?.setItem(key, dataUrl);
+    } catch (error) {
+      // 画像が大きい端末でも、少なくとも現在の画面では反映できるようにする。
+    }
+  }
+
+  function resetBalanceCardBackground() {
+    const child = getCurrentChildData();
+    if (!child) {
+      return;
+    }
+
+    const key = getBalanceCardBackgroundKey(child);
+    delete getBalanceCardBackgroundStore()[key];
+    try {
+      window.localStorage?.removeItem(key);
+    } catch (error) {
+      // 保存領域に触れない環境でも、画面上の背景だけは戻せるようにする。
+    }
+    scheduleUpgrade();
+  }
+
+  function getBalanceCardBackgroundStore() {
+    window.__studyPayBalanceCardBackgrounds = window.__studyPayBalanceCardBackgrounds || {};
+    return window.__studyPayBalanceCardBackgrounds;
+  }
+
+  function applicationPointLabel(application) {
+    const points = application.fixedPoints ?? application.suggestedPoints;
+    return points == null ? "おまかせ" : `${Number(points).toLocaleString()}pt`;
+  }
+
+  function applicationPointStatus(status) {
+    if (status === "approved" || status === "approval_canceled") {
+      return { className: "is-approved", icon: "circle-check" };
+    }
+
+    if (isRedoApplicationStatus(status)) {
+      return { className: "is-redo", icon: "circle-alert" };
+    }
+
+    return { className: "is-pending", icon: "clock" };
+  }
+
+  function isRedoApplicationStatus(status) {
+    return ["returned", "rejected", "canceled"].includes(status);
+  }
+
+  function isApprovedApplicationStatus(status) {
+    return status === "approved";
+  }
+
+  function applicationScoreLabel(application) {
+    if (application.category !== "test" || application.score == null || application.score === "") {
+      return "";
+    }
+
+    const fullScore = Number(application.testFullScore) === 50 ? 50 : 100;
+    return `${Number(application.score).toLocaleString()} / ${fullScore}`;
+  }
+
+  function homeApplicationMediaPreview(application) {
+    const firstPhoto = application.photos?.[0];
+    if (firstPhoto?.dataUrl) {
+      return `<span class="child-activity-thumb"><img src="${escapeText(firstPhoto.dataUrl)}" alt="${escapeText(firstPhoto.name || "申請写真")}" /></span>`;
+    }
+
+    return `<div class="child-activity-thumb child-activity-placeholder" aria-hidden="true">${categoryIcon(application.category)}</div>`;
+  }
+
+  function applicationCategoryChip(application) {
+    return `<span class="category-chip ${escapeText(application.category)}">${escapeText(categoryLabel(application.category))}</span>`;
+  }
+
+  function categoryIcon(category) {
+    if (category === "test") {
+      return "T";
+    }
+
+    if (category === "grade") {
+      return "G";
+    }
+
+    return "O";
   }
 
   function applicationTitle(application) {
@@ -485,6 +1036,14 @@
       .replace(/'/g, "&#039;");
   }
 
+  function escapeStyleUrl(value) {
+    return String(value ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  }
+
+  function lucideIcon(name, className = "") {
+    return window.StudyPayIcons?.icon(name, className) || "";
+  }
+
   function ensureStyles() {
     if (document.querySelector(`#${STYLE_ID}`)) {
       return;
@@ -535,6 +1094,13 @@
         color: #ff8200;
       }
 
+      .child-design-logo-image {
+        display: block;
+        width: auto;
+        height: 48px;
+        object-fit: contain;
+      }
+
       .child-design-logo-icon {
         position: relative;
         width: 31px;
@@ -568,48 +1134,43 @@
         background: #ff7b00;
       }
 
-      .child-design-profile span {
-        position: relative;
-        width: 28px;
-        height: 28px;
-        border: 3px solid #9a5b00;
-        border-radius: 50%;
-      }
-
-      .child-design-profile span::before,
-      .child-design-profile span::after {
-        content: "";
-        position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
-        border: 3px solid #9a5b00;
-      }
-
-      .child-design-profile span::before {
-        top: 5px;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-      }
-
-      .child-design-profile span::after {
-        bottom: 4px;
-        width: 15px;
-        height: 8px;
-        border-radius: 10px 10px 0 0;
-        border-bottom: 0;
+      .child-profile-icon {
+        width: 30px;
+        height: 30px;
+        color: #9a5b00;
+        stroke-width: 2.4;
       }
 
       .child-balance-card {
+        position: relative;
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 24px 14px;
         margin-bottom: 36px;
         border-radius: 24px;
-        background: linear-gradient(135deg, #ff8200 0%, #ffb344 100%);
+        background: #ff920d;
         color: #fff;
+        overflow: hidden;
         padding: 28px 24px 24px;
         box-shadow: 0 12px 22px rgba(255, 130, 0, 0.16);
+      }
+
+      .child-balance-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, #ff8200 0%, #ffb344 100%);
+      }
+
+      .child-balance-card.has-custom-bg::before {
+        background:
+          linear-gradient(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.28)),
+          var(--child-balance-bg-image) center / cover no-repeat;
+      }
+
+      .child-balance-card > * {
+        position: relative;
+        z-index: 1;
       }
 
       .child-balance-copy {
@@ -626,15 +1187,31 @@
       .child-balance-copy strong {
         display: flex;
         align-items: baseline;
-        flex-wrap: wrap;
-        gap: 12px;
-        font-size: 56px;
-        line-height: 0.92;
+        flex-wrap: nowrap;
+        gap: 6px;
+        font-size: 42px;
+        line-height: 1;
         letter-spacing: 0;
+        white-space: nowrap;
+      }
+
+      .child-balance-number {
+        position: relative;
+        display: inline-block;
+      }
+
+      .child-balance-number.is-capped::after {
+        content: "+";
+        position: absolute;
+        top: -9px;
+        right: -15px;
+        font-size: 18px;
+        font-weight: 900;
+        line-height: 1;
       }
 
       .child-balance-copy small {
-        font-size: 20px;
+        font-size: 14px;
         font-weight: 800;
       }
 
@@ -650,6 +1227,64 @@
         font-weight: 900;
       }
 
+      .child-card-bg-text-button {
+        display: block;
+        width: fit-content;
+        min-height: 30px;
+        border: 0;
+        background: transparent;
+        color: #9b7a5e;
+        padding: 0;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .child-card-bg-controls {
+        position: relative;
+        display: grid;
+        justify-items: end;
+        margin: -24px 0 30px;
+      }
+
+      .child-card-bg-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 5;
+        display: grid;
+        min-width: 190px;
+        overflow: hidden;
+        border: 1px solid #f1e0cf;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 14px 30px rgba(92, 62, 26, 0.14);
+      }
+
+      .child-card-bg-menu[hidden] {
+        display: none;
+      }
+
+      .child-card-bg-menu button {
+        min-height: 46px;
+        border: 0;
+        border-bottom: 1px solid #f6eadf;
+        background: #fff;
+        color: #3c2b1e;
+        padding: 0 16px;
+        text-align: left;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .child-card-bg-menu button:last-child {
+        border-bottom: 0;
+        color: #8a4c00;
+      }
+
+      .child-card-bg-input {
+        display: none;
+      }
+
       .child-balance-metrics {
         grid-column: 1 / -1;
         display: grid;
@@ -657,13 +1292,21 @@
         gap: 14px;
       }
 
-      .child-balance-metrics div {
+      .child-balance-metrics div,
+      .child-balance-metric-button {
         display: grid;
         gap: 7px;
         min-height: 72px;
+        border: 0;
         border-radius: 16px;
         background: rgba(255, 255, 255, 0.2);
+        color: #fff;
         padding: 13px 16px;
+        text-align: left;
+      }
+
+      .child-balance-metric-button {
+        cursor: pointer;
       }
 
       .child-balance-metrics span {
@@ -677,8 +1320,91 @@
         line-height: 1.15;
       }
 
+      .child-balance-metrics small {
+        font-size: 13px;
+        font-weight: 800;
+      }
+
       .child-recent-section {
         margin-bottom: 34px;
+      }
+
+      .child-home-points-section {
+        margin-bottom: 34px;
+      }
+
+      .child-home-point-history-list {
+        gap: 12px;
+      }
+
+      .child-home-point-history-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px 14px;
+        align-items: start;
+        border: 0;
+        border-radius: 24px;
+        box-shadow: 0 10px 28px rgba(119, 85, 40, 0.06);
+      }
+
+      .child-home-point-history-main {
+        min-width: 0;
+      }
+
+      .child-home-point-history-title {
+        margin: 0 0 7px;
+        color: var(--ink);
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      .child-home-point-history-date {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.4;
+      }
+
+      .child-home-point-history-points {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+        color: #16a34a;
+        font-size: 18px;
+        font-weight: 700;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      .child-home-point-history-points.is-redemption {
+        color: #dc2626;
+      }
+
+      .child-home-point-history-points.is-pending {
+        color: #d97706;
+      }
+
+      .child-home-point-history-tag {
+        grid-column: 1 / -1;
+        justify-self: start;
+        margin-top: 2px;
+        border: 0;
+        background: #16a34a;
+        color: #ffffff;
+        padding: 4px 9px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+
+      .child-home-point-history-tag.is-redemption {
+        background: #dc2626;
+      }
+
+      .child-home-point-history-tag.is-pending {
+        background: #d97706;
       }
 
       .child-section-heading {
@@ -707,6 +1433,10 @@
       .child-recent-list {
         display: grid;
         gap: 16px;
+      }
+
+      .child-home-history-card {
+        margin: 0;
       }
 
       .child-recent-card {
@@ -896,12 +1626,12 @@
         left: 0;
         z-index: 20;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         align-items: center;
         max-width: 440px;
         min-height: 86px;
         margin: 0 auto;
-        border-radius: 30px 30px 0 0;
+        border-radius: 0;
         background: rgba(255, 255, 255, 0.96);
         padding: 10px 22px max(12px, env(safe-area-inset-bottom));
         box-shadow: 0 -10px 28px rgba(80, 55, 28, 0.08);
@@ -936,10 +1666,19 @@
       }
 
       .nav-symbol {
-        position: relative;
         display: block;
         width: 30px;
         height: 30px;
+      }
+
+      .lucide-icon {
+        flex: 0 0 auto;
+      }
+
+      .child-design-nav-item.primary .nav-symbol {
+        width: 36px;
+        height: 36px;
+        stroke-width: 3;
       }
 
       .nav-symbol.home::before {
@@ -1001,7 +1740,7 @@
       .child-apply-design {
         min-height: 100dvh;
         padding: 0 20px 118px;
-        background: linear-gradient(180deg, #fff 0, #fff 70px, #fff8f1 70px, #fffaf6 100%);
+        background: #fffaf6;
       }
 
       .child-apply-design .child-topbar {
@@ -1010,27 +1749,38 @@
 
       .child-apply-hero {
         display: grid;
-        grid-template-columns: 44px minmax(0, 1fr);
-        gap: 14px;
-        align-items: start;
-        margin: 0 -20px 20px;
+        grid-template-columns: 36px minmax(0, 1fr) 36px;
+        gap: 0;
+        align-items: center;
+        margin: 0 -20px 0;
         border-bottom: 1px solid #f1e5dc;
         background: #fff;
-        padding: 16px 20px 20px;
+        padding: 12px 20px;
+      }
+
+      .child-apply-hero > div {
+        min-width: 0;
+        text-align: center;
       }
 
       .child-back-button {
         display: grid;
-        width: 42px;
-        height: 42px;
+        width: 34px;
+        height: 34px;
         place-items: center;
         border: 0;
         border-radius: 50%;
-        background: #fff3e7;
-        color: #9a5b00;
+        background: transparent;
+        color: #111;
         font-size: 34px;
         line-height: 1;
         font-weight: 800;
+      }
+
+      .child-back-icon {
+        width: 24px;
+        height: 24px;
+        stroke-width: 2.8;
       }
 
       .child-apply-hero span {
@@ -1040,8 +1790,8 @@
       }
 
       .child-apply-hero h1 {
-        margin: 4px 0 6px;
-        font-size: 28px;
+        margin: 0;
+        font-size: 22px;
         line-height: 1.25;
         letter-spacing: 0;
       }
@@ -1057,6 +1807,7 @@
       .child-apply-card {
         display: grid;
         gap: 18px;
+        margin-top: 18px;
         border: 0;
         border-radius: 28px;
         background: #fff;
@@ -1090,13 +1841,23 @@
         letter-spacing: 0;
       }
 
+      .child-apply-card #application-subject {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%232a1c12' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-position: right 18px center;
+        background-repeat: no-repeat;
+        background-size: 18px 18px;
+        padding-right: 48px;
+      }
+
       .child-apply-card textarea {
         min-height: 112px;
         resize: vertical;
         line-height: 1.65;
       }
 
-      .child-category-field > select {
+      .child-category-field > select,
+      .child-score-field > select {
         position: absolute;
         width: 1px;
         height: 1px;
@@ -1111,14 +1872,20 @@
         gap: 10px;
       }
 
+      .child-score-options {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
       .child-category-option {
         display: grid;
-        gap: 5px;
-        min-height: 78px;
+        place-items: center;
+        min-height: 58px;
         border: 1px solid #f0dfcf;
         border-radius: 20px;
         background: #fffaf5;
-        color: #2a1c12;
+        color: #8d837a;
         padding: 12px 8px;
         text-align: center;
       }
@@ -1148,22 +1915,53 @@
 
       .child-photo-field input[type="file"] {
         position: absolute;
-        width: 1px;
-        height: 1px;
+        inset: 0;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
         overflow: hidden;
         opacity: 0;
+        cursor: pointer;
+      }
+
+      .child-photo-lucide-icon {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        color: #ff8200;
+        pointer-events: none;
+      }
+
+      .child-photo-svg {
+        width: 30px;
+        height: 30px;
+        stroke-width: 2.2;
       }
 
       .child-photo-drop {
+        position: relative;
         display: grid;
         place-items: center;
-        gap: 7px;
-        min-height: 142px;
+        justify-self: start;
+        width: calc((100% - 20px) / 3);
+        aspect-ratio: 1 / 1;
+        min-height: 0;
         border: 2px dashed #f0c79c;
-        border-radius: 24px;
+        border-radius: 16px;
         background: #fff8ef;
-        color: #8a4c00;
+        color: #ff8200;
         text-align: center;
+        overflow: hidden;
+      }
+
+      .child-photo-field .child-photo-drop,
+      .child-photo-field .child-photo-preview-add {
+        color: #ff8200;
+      }
+
+      .child-photo-drop.is-hidden {
+        display: none;
       }
 
       .child-photo-icon {
@@ -1202,11 +2000,80 @@
 
       .child-photo-drop small,
       .child-apply-card .field-help,
+      .child-photo-feedback,
       .child-submit-note {
         color: #7a6a5f;
         font-size: 12px;
         font-weight: 800;
         line-height: 1.55;
+      }
+
+      .child-photo-feedback {
+        display: none;
+      }
+
+      .child-photo-preview {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        min-height: 0;
+      }
+
+      .child-photo-preview:empty {
+        display: none;
+      }
+
+      .child-photo-preview-item {
+        position: relative;
+        display: block;
+        aspect-ratio: 1 / 1;
+        overflow: hidden;
+        border: 1px solid #f0dfcf;
+        border-radius: 16px;
+        background: #fff8ef;
+      }
+
+      .child-photo-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .child-photo-remove-button {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 3;
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(29, 23, 18, 0.72);
+        color: #fff;
+        font-size: 18px;
+        font-weight: 900;
+        line-height: 1;
+      }
+
+      .child-photo-preview-add {
+        position: relative;
+        display: grid;
+        aspect-ratio: 1 / 1;
+        place-items: center;
+        border: 2px dashed #f0c79c;
+        border-radius: 16px;
+        background: #fff8ef;
+        color: #ff8200;
+        cursor: pointer;
+      }
+
+      .child-photo-preview-add-icon {
+        width: 30px;
+        height: 30px;
+        stroke-width: 2.2;
       }
 
       .child-submit-note {
@@ -1227,17 +2094,142 @@
 
       .child-cancel-button {
         min-height: 52px;
-        border: 1px solid #f0dfcf;
+        border: 1px solid #e8e2dc;
         border-radius: 999px;
         background: #fff;
-        color: #8a4c00;
+        color: #8f8378;
         font-size: 16px;
         font-weight: 900;
+      }
+
+      .child-delete-button {
+        min-height: 52px;
+        border: 1px solid rgba(199, 55, 47, 0.24);
+        border-radius: 999px;
+        background: #fff5f4;
+        color: #c7372f;
+        font-size: 16px;
+        font-weight: 900;
+      }
+
+      .child-delete-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: grid;
+        place-items: center;
+        background: rgba(29, 23, 18, 0.48);
+        padding: 22px;
+      }
+
+      .child-delete-modal-panel {
+        display: grid;
+        gap: 14px;
+        width: min(100%, 340px);
+        border-radius: 24px;
+        background: #fff;
+        padding: 22px;
+        box-shadow: 0 18px 44px rgba(29, 23, 18, 0.18);
+      }
+
+      .child-delete-modal-panel strong {
+        color: #1d1712;
+        font-size: 19px;
+        font-weight: 900;
+        line-height: 1.35;
+      }
+
+      .child-delete-modal-panel p {
+        margin: 0;
+        color: #7a6a5f;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.6;
+      }
+
+      .child-delete-modal-actions {
+        display: grid;
+        gap: 10px;
+      }
+
+      .child-delete-modal-confirm,
+      .child-delete-modal-cancel {
+        min-height: 50px;
+        border-radius: 999px;
+        font-size: 16px;
+        font-weight: 900;
+      }
+
+      .child-delete-modal-confirm {
+        border: 1px solid rgba(199, 55, 47, 0.24);
+        background: #fff5f4;
+        color: #c7372f;
+      }
+
+      .child-delete-modal-cancel {
+        border: 1px solid #e8e2dc;
+        background: #fff;
+        color: #8f8378;
+      }
+
+      .child-complete-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: grid;
+        place-items: center;
+        background: rgba(29, 23, 18, 0.38);
+        padding: 22px;
+      }
+
+      .child-complete-modal-panel {
+        display: grid;
+        gap: 12px;
+        width: min(100%, 340px);
+        border-radius: 24px;
+        background: #fff;
+        padding: 26px 22px 22px;
+        text-align: center;
+        box-shadow: 0 18px 44px rgba(29, 23, 18, 0.18);
+      }
+
+      .child-complete-modal-panel strong {
+        color: #1d1712;
+        font-size: 22px;
+        font-weight: 900;
+        line-height: 1.35;
+      }
+
+      .child-complete-modal-panel p {
+        margin: 0 0 8px;
+        color: #7a6a5f;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.6;
+      }
+
+      .child-complete-modal-button {
+        width: 100%;
+        min-height: 50px;
+        border-radius: 999px;
       }
 
       .child-apply-card .error {
         color: #c7372f;
         font-weight: 900;
+      }
+
+      .child-apply-card .field-error {
+        min-height: 18px;
+        color: #c7372f;
+        font-size: 12px;
+        font-weight: 900;
+        line-height: 1.5;
+      }
+
+      .child-apply-card input.input-error {
+        border-color: #c7372f;
+        box-shadow: 0 0 0 3px rgba(199, 55, 47, 0.12);
       }
 
       @media (max-width: 380px) {
@@ -1255,7 +2247,7 @@
         }
 
         .child-balance-copy strong {
-          font-size: 48px;
+          font-size: 38px;
         }
 
         .child-recent-card {
