@@ -6,6 +6,7 @@
 
   ensureStyles();
   scheduleUpgrade();
+  watchAppRender();
   bindDelegatedActions();
   bindHomeBackgroundActions();
   bindLoginRedirectGuard();
@@ -168,6 +169,20 @@
   function scheduleUpgrade() {
     window.setTimeout(upgradeChildScreen, 0);
     window.setTimeout(upgradeChildScreen, 300);
+    window.setTimeout(upgradeChildScreen, 900);
+    window.setTimeout(upgradeChildScreen, 1600);
+  }
+
+  function watchAppRender() {
+    const app = document.querySelector("#app");
+    if (!app) {
+      window.setTimeout(watchAppRender, 100);
+      return;
+    }
+
+    new MutationObserver(() => {
+      scheduleUpgrade();
+    }).observe(app, { childList: true });
   }
 
   function upgradeChildScreen() {
