@@ -16,6 +16,25 @@
 
   function bindDelegatedActions() {
     document.addEventListener("click", (event) => {
+      const parentSwitchButton = event.target.closest("#child-parent-switch-trigger");
+      if (parentSwitchButton) {
+        if (typeof toggleChildParentSwitchMenu === "function") {
+          toggleChildParentSwitchMenu();
+        }
+        return;
+      }
+
+      const parentSwitchAction = event.target.closest("#child-parent-switch-action");
+      if (parentSwitchAction) {
+        if (typeof closeChildParentSwitchMenu === "function") {
+          closeChildParentSwitchMenu();
+        }
+        if (typeof showParentSwitchPasswordModal === "function") {
+          showParentSwitchPasswordModal();
+        }
+        return;
+      }
+
       const logoutButton = event.target.closest("#child-logout-button");
       if (logoutButton) {
         window.localStorage?.removeItem(CHILD_SESSION_KEY);
@@ -44,12 +63,14 @@
     document.addEventListener("click", (event) => {
       const backgroundButton = event.target.closest("[data-child-balance-bg-button]");
       if (backgroundButton) {
+        event.stopPropagation();
         toggleBalanceBackgroundMenu();
         return;
       }
 
       const menuAction = event.target.closest("[data-child-balance-bg-action]");
       if (menuAction) {
+        event.stopPropagation();
         const action = menuAction.dataset.childBalanceBgAction;
         handleBalanceBackgroundAction(action);
         return;
@@ -217,6 +238,7 @@
       return;
     }
 
+    const isBalanceBackgroundMenuOpen = !screen.querySelector("[data-child-balance-bg-menu]")?.hidden;
     const applications = getApplications(child);
     const availablePoints = getAvailablePoints(child);
     const maxPointsPreview = isMaxPointsPreview();
@@ -239,9 +261,14 @@
         <div class="child-design-logo" aria-label="スタディペイ">
           <img class="child-design-logo-image" src="./logo.png" alt="スタディペイ" />
         </div>
-        <div class="child-design-profile" aria-label="${escapeText(child.nickname || "タロー")}">
-          ${lucideIcon("circle-user-round", "child-profile-icon")}
-          <strong>${escapeText(child.nickname || "タロー")}</strong>
+        <div class="child-design-profile-wrap">
+          <button class="child-design-profile" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeText(child.nickname || "タロー")}">
+            ${childDesignProfileAvatar(child)}
+            <strong>${escapeText(child.nickname || "タロー")}</strong>
+          </button>
+          <div class="child-parent-switch-menu" id="child-parent-switch-menu" role="menu" hidden>
+            <button type="button" role="menuitem" id="child-parent-switch-action">保護者アカウントに切り替える</button>
+          </div>
         </div>
       </header>
 
@@ -264,8 +291,8 @@
       </section>
       <div class="child-card-bg-controls">
         <button class="child-card-bg-text-button" type="button" data-child-balance-bg-button>カードの背景を変更する</button>
-        <div class="child-card-bg-menu" data-child-balance-bg-menu hidden>
-          <button type="button" data-child-balance-bg-action="camera">写真を取る</button>
+        <div class="child-card-bg-menu" data-child-balance-bg-menu ${isBalanceBackgroundMenuOpen ? "" : "hidden"}>
+          <button type="button" data-child-balance-bg-action="camera">写真を撮る</button>
           <button type="button" data-child-balance-bg-action="library">写真から選択</button>
           <button type="button" data-child-balance-bg-action="reset">デフォルトに戻す</button>
         </div>
@@ -640,7 +667,7 @@
   }
 
   function upgradeBottomNav(screen, route) {
-    const nav = screen.querySelector('nav[aria-label="子どもメニュー"], .bottom-nav');
+    const nav = screen.querySelector('nav[aria-label="こどもメニュー"], .bottom-nav');
     if (!nav) {
       return;
     }
@@ -649,7 +676,7 @@
   }
 
   function removeBottomNav(screen) {
-    screen.querySelector('nav[aria-label="子どもメニュー"], .bottom-nav')?.remove();
+    screen.querySelector('nav[aria-label="こどもメニュー"], .bottom-nav')?.remove();
   }
 
   function bottomNav(active) {
@@ -660,7 +687,7 @@
     ];
 
     return `
-      <nav class="child-design-nav" aria-label="子どもメニュー">
+      <nav class="child-design-nav" aria-label="こどもメニュー">
         ${items
           .map(
             ([key, icon, label, path]) => `
@@ -801,11 +828,55 @@
   function getCurrentChildData() {
     try {
       const account = JSON.parse(window.localStorage?.getItem(ACCOUNT_KEY) || "null");
-      const childId = window.localStorage?.getItem(CHILD_SESSION_KEY);
-      return (account?.children || []).find((child) => child.id === childId && child.status !== "deleted") || null;
+      const session = getChildSessionData();
+      const child = (account?.children || []).find((item) => item.id === session?.childId && item.status !== "deleted") || null;
+      if (!isChildSessionDataValid(child, session)) {
+        window.localStorage?.removeItem(CHILD_SESSION_KEY);
+        return null;
+      }
+      return child;
     } catch {
       return null;
     }
+  }
+
+  function getChildSessionData() {
+    const rawSession = window.localStorage?.getItem(CHILD_SESSION_KEY);
+    if (!rawSession) {
+      return null;
+    }
+
+    try {
+      const session = JSON.parse(rawSession);
+      if (session && typeof session === "object" && session.childId) {
+        return {
+          childId: session.childId,
+          passwordUpdatedAt: session.passwordUpdatedAt || null,
+          legacy: false,
+        };
+      }
+    } catch {
+      // 旧形式はこどもIDだけを保存していたため、そのまま互換対応する。
+    }
+
+    return {
+      childId: rawSession,
+      passwordUpdatedAt: null,
+      legacy: true,
+    };
+  }
+
+  function isChildSessionDataValid(child, session) {
+    if (!child || !session) {
+      return false;
+    }
+
+    const passwordUpdatedAt = child.passwordUpdatedAt || null;
+    if (session.legacy) {
+      return !passwordUpdatedAt;
+    }
+
+    return session.passwordUpdatedAt === passwordUpdatedAt;
   }
 
   function getApplications(child) {
@@ -1059,6 +1130,19 @@
     return String(value ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   }
 
+  function childDesignProfileAvatar(child) {
+    const photo = child?.profilePhoto?.dataUrl;
+    return `
+      <span class="child-design-profile-avatar ${photo ? "has-photo" : ""}">
+        ${
+          photo
+            ? `<img src="${escapeText(photo)}" alt="${escapeText(child?.profilePhoto?.name || `${child?.nickname || "こども"}のプロフィール写真`)}" />`
+            : lucideIcon("circle-user-round", "child-profile-icon")
+        }
+      </span>
+    `;
+  }
+
   function lucideIcon(name, className = "") {
     return window.StudyPayIcons?.icon(name, className) || "";
   }
@@ -1111,6 +1195,30 @@
 
       .child-design-logo > span:last-child span {
         color: #ff8200;
+      }
+
+      .child-design-profile-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .child-design-profile-avatar {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 50%;
+        color: #9a5b00;
+        overflow: hidden;
+      }
+
+      .child-design-profile-avatar img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
       }
 
       .child-design-logo-image {

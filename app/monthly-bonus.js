@@ -220,7 +220,7 @@
     ];
 
     return `
-      <nav class="bottom-nav child-bottom-nav" aria-label="子どもメニュー">
+      <nav class="bottom-nav child-bottom-nav" aria-label="こどもメニュー">
         ${items
           .map(
             ([key, icon, label, path]) => `
@@ -252,13 +252,13 @@
     const primaryActionLabel = pendingApplications.length
       ? "申請を確認する"
       : childCount === 0
-        ? "子どもを追加する"
-        : "子ども一覧を見る";
+        ? "こどもを追加する"
+        : "こども一覧を見る";
     const primaryActionCopy = pendingApplications.length
       ? "確認待ちの申請があります。時間のあるときにまとめて見られます。"
       : childCount === 0
-        ? "まずは子どもを追加して、ログイン情報を発行します。"
-        : "今日は急ぎの申請はありません。子ども情報やルールを確認できます。";
+        ? "まずはこどもを追加して、ログイン情報を発行します。"
+        : "今日は急ぎの申請はありません。こども情報やルールを確認できます。";
 
     return `
       <section class="screen home-screen">
@@ -360,11 +360,11 @@
                 <div class="monthly-card-head">
                   <div>
                     <span class="summary-kicker">今月の確認</span>
-                    <h2>${escapeHtml(selectedChild?.nickname || "子ども")}への追加ポイント</h2>
+                    <h2>${escapeHtml(selectedChild?.nickname || "こども")}への追加ポイント</h2>
                   </div>
                 </div>
                 <div class="field">
-                  <label for="monthly-bonus-child">対象の子ども</label>
+                  <label for="monthly-bonus-child">対象のこども</label>
                   <select id="monthly-bonus-child" name="childId">
                     ${children.map((child) => `<option value="${escapeHtml(child.id)}" ${selectedAttr(selectedChild?.id, child.id)}>${escapeHtml(child.nickname)}</option>`).join("")}
                   </select>
@@ -379,7 +379,7 @@
                     <strong>${targetMonth.replace("-", "年")}月</strong>
                   </div>
                 </div>
-                <p class="card-copy">子どもの申請とは別に、保護者が確認してから付与します。何もしなければポイントは増えません。</p>
+                <p class="card-copy">こどもの申請とは別に、保護者が確認してから付与します。何もしなければポイントは増えません。</p>
               </form>
 
               <form class="card form form-card monthly-reference-form" id="monthly-bonus-reference-form">
@@ -440,7 +440,7 @@
                 ${monthlyBonusList(selectedChild)}
               </div>
             `
-            : `<div class="card empty-state"><strong>子どもがまだ登録されていません</strong><p>月次ボーナスを使うには、先に子どもを追加してください。</p><button class="primary-button compact-button" type="button" data-route="/parent/children/new">子どもを追加する</button></div>`
+            : `<div class="card empty-state"><strong>こどもがまだ登録されていません</strong><p>月次ボーナスを使うには、先にこどもを追加してください。</p><button class="primary-button compact-button" type="button" data-route="/parent/children/new">こどもを追加する</button></div>`
         }
 
         ${bottomNav("home")}

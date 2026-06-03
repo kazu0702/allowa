@@ -32,6 +32,7 @@ const state = {
   parent: loadSessionParent(),
   flash: "",
   monthlyBonusChildId: "",
+  parentApplicationsFilter: "all",
   childHistoryFilter: "all",
 };
 const cloudState = {
@@ -204,6 +205,55 @@ function clearSession() {
 
 function clearChildSession() {
   localStorage.removeItem(CHILD_SESSION_KEY);
+}
+
+function getChildSession() {
+  const rawSession = localStorage.getItem(CHILD_SESSION_KEY);
+  if (!rawSession) {
+    return null;
+  }
+
+  try {
+    const session = JSON.parse(rawSession);
+    if (session && typeof session === "object" && session.childId) {
+      return {
+        childId: session.childId,
+        passwordUpdatedAt: session.passwordUpdatedAt || null,
+        legacy: false,
+      };
+    }
+  } catch {
+    // 旧形式はこどもIDだけを保存していたため、そのまま互換対応する。
+  }
+
+  return {
+    childId: rawSession,
+    passwordUpdatedAt: null,
+    legacy: true,
+  };
+}
+
+function setChildSession(child) {
+  localStorage.setItem(
+    CHILD_SESSION_KEY,
+    JSON.stringify({
+      childId: child.id,
+      passwordUpdatedAt: child.passwordUpdatedAt || null,
+    }),
+  );
+}
+
+function isChildSessionValid(child, session) {
+  if (!child || !session) {
+    return false;
+  }
+
+  const passwordUpdatedAt = child.passwordUpdatedAt || null;
+  if (session.legacy) {
+    return !passwordUpdatedAt;
+  }
+
+  return session.passwordUpdatedAt === passwordUpdatedAt;
 }
 
 function navigate(path) {
@@ -551,18 +601,18 @@ function lpView() {
 
       <div class="hero">
         <h1>がんばった成績を、おこづかいに。</h1>
-        <p>テストや学習成果を子どもが自分で申請し、保護者が確認してポイント付与。がんばりが数字で増えるから、次も挑戦したくなります。</p>
+        <p>テストや学習成果をこどもが自分で申請し、保護者が確認してポイント付与。がんばりが数字で増えるから、次も挑戦したくなります。</p>
         <div class="hero-actions">
           <button class="primary-button" type="button" data-route="/signup">14日間無料で始める</button>
           <button class="secondary-button" type="button" data-route="/login">ログイン</button>
-          <button class="secondary-button" type="button" data-route="/child/login">子どもログイン</button>
+          <button class="secondary-button" type="button" data-route="/child/login">こどもログイン</button>
         </div>
       </div>
 
       <div class="feature-strip" aria-label="使い方">
         <div class="mini-card">
           <span class="icon-dot">1</span>
-          <div><strong>子どもが申請</strong><span>テスト、成績、その他のがんばりを写真つきで送ります。</span></div>
+          <div><strong>こどもが申請</strong><span>テスト、成績、その他のがんばりを写真つきで送ります。</span></div>
         </div>
         <div class="mini-card">
           <span class="icon-dot">2</span>
@@ -575,7 +625,7 @@ function lpView() {
       </div>
 
       <section class="section motivation-section">
-        <h2>子どものやる気が続きやすい理由</h2>
+        <h2>こどものやる気が続きやすい理由</h2>
         <div class="motivation-list">
           <div class="motivation-item">
             <span class="motivation-icon">↑</span>
@@ -670,7 +720,7 @@ function loginView() {
           <button class="primary-button" type="submit">ログイン</button>
           <button class="secondary-button" type="button" data-route="/demo-parent-login">デモ保護者でログイン</button>
           <button class="secondary-button" type="button" data-route="/signup">無料トライアルを始める</button>
-          <button class="secondary-button" type="button" data-route="/child/login">子どもログインへ</button>
+          <button class="secondary-button" type="button" data-route="/child/login">こどもログインへ</button>
         </form>
       </div>
     </section>
@@ -684,7 +734,7 @@ function childLoginView() {
         <button class="text-button" type="button" data-route="/">戻る</button>
       </div>
       <div class="card auth-card">
-        <h1>子どもログイン</h1>
+        <h1>こどもログイン</h1>
         <p>保護者からもらったログインIDとパスワードで入ります。</p>
         <form class="form" id="child-login-form">
           <div class="field">
@@ -697,7 +747,7 @@ function childLoginView() {
           </div>
           <div class="error" id="child-login-error"></div>
           <button class="primary-button" type="submit">ログイン</button>
-          <button class="secondary-button" type="button" data-route="/demo-child-login">デモ子どもでログイン</button>
+          <button class="secondary-button" type="button" data-route="/demo-child-login">デモこどもでログイン</button>
           <button class="secondary-button" type="button" data-route="/login">保護者ログインへ</button>
         </form>
       </div>
@@ -733,7 +783,7 @@ function adminLoginView() {
 function parentHomeView() {
   const parent = state.parent || initialParent;
   const subscription = getSubscription(parent);
-  const children = getChildren();
+  const children = isPreviewNoChildren() ? [] : getChildren();
   const childCount = children.length;
   const pendingApplications = getParentApplications().filter((item) => item.application.status === "pending");
   const pendingRedemptions = getParentRedemptions().filter((item) => item.redemption.status === "pending");
@@ -747,22 +797,25 @@ function parentHomeView() {
   const primaryActionLabel = pendingApplications.length
     ? "申請を確認する"
     : childCount === 0
-      ? "子どもを追加する"
-      : "子ども一覧を見る";
+      ? "こどもを追加する"
+      : "こども一覧を見る";
   const primaryActionCopy = pendingApplications.length
     ? "確認待ちの申請があります。時間のあるときにまとめて見られます。"
     : childCount === 0
-      ? "まずは子どもを追加して、ログイン情報を発行します。"
-      : "今日は急ぎの申請はありません。子ども情報やルールを確認できます。";
+      ? "まずはこどもを追加して、ログイン情報を発行します。"
+      : "今日は急ぎの申請はありません。こども情報やルールを確認できます。";
   return `
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
           <img class="header-logo-image parent-header-logo-image" src="./logo.png" alt="スタディペイ" />
         </div>
-        <div class="parent-header-profile">
-          ${studyPayIcon("circle-user-round", "parent-profile-icon")}
-          <span>${escapeHtml(parent.nickname || "保護者")}</span>
+        <div class="parent-header-switch">
+          <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
+            ${studyPayIcon("circle-user-round", "parent-profile-icon")}
+            <span>${escapeHtml(parent.nickname || "保護者")}</span>
+          </button>
+          ${parentChildSwitchMenu(children)}
         </div>
       </div>
 
@@ -804,26 +857,64 @@ function parentHomeView() {
   `;
 }
 
+function parentChildSwitchMenu(children) {
+  return `
+    <div class="parent-child-switch-menu" id="parent-child-switch-menu" role="menu" hidden>
+      ${
+        children.length
+          ? children.map((child) => `
+            <button type="button" role="menuitem" data-switch-child-id="${escapeHtml(child.id)}">
+              ${childAvatar(child, "parent-child-switch-avatar")}
+              <span>${escapeHtml(child.nickname)}</span>
+            </button>
+          `).join("")
+          : `<button type="button" role="menuitem" data-route="/parent/children/new">こどもを追加する</button>`
+      }
+      <button class="parent-child-switch-logout" type="button" role="menuitem" data-route="/parent/settings/logout">ログアウト</button>
+    </div>
+  `;
+}
+
 function parentHomeChildrenStatus(children) {
   if (!children.length) {
     return `
       <section class="parent-child-status-section">
-        <div class="section-label">子どもの状況</div>
-        <button class="card parent-child-status-empty" type="button" data-route="/parent/children/new">
-          <span>子どもを追加する</span>
-          ${studyPayIcon("chevron-right", "settings-menu-chevron")}
-        </button>
+        <div class="section-label">こどもの状況</div>
+        <div class="card parent-child-status-empty">
+          ${studyPayIcon("circle-user-round", "parent-child-status-empty-icon")}
+          <strong>まずはお子さまを追加してください</strong>
+        </div>
+        <button class="primary-button compact-button parent-child-add-button" type="button" data-route="/parent/children/new">こどもを追加する</button>
       </section>
     `;
   }
 
+  const canAdd = children.length < MAX_CHILDREN;
   return `
     <section class="parent-child-status-section">
-      <div class="section-label">子どもの状況</div>
+      <div class="section-label">こどもの状況</div>
       <div class="parent-child-status-list">
         ${children.map(parentHomeChildStatusCard).join("")}
       </div>
+      ${canAdd ? `<button class="primary-button compact-button parent-child-add-button" type="button" data-route="/parent/children/new">こどもを追加する</button>` : ""}
     </section>
+  `;
+}
+
+function isPreviewNoChildren() {
+  return new URLSearchParams(window.location.search).get("previewNoChildren") === "1";
+}
+
+function childAvatar(child, className = "") {
+  const photo = child?.profilePhoto?.dataUrl;
+  return `
+    <span class="child-avatar profile-avatar ${photo ? "profile-avatar-photo" : ""} ${className}">
+      ${
+        photo
+          ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(child?.profilePhoto?.name || `${child?.nickname || "こども"}のプロフィール写真`)}" />`
+          : studyPayIcon("circle-user-round", "profile-avatar-icon")
+      }
+    </span>
   `;
 }
 
@@ -831,25 +922,53 @@ function parentHomeChildStatusCard(child) {
   const pendingApplications = getChildApplications(child).filter((application) => application.status === "pending").length;
   const pendingRedemptions = getChildRedemptions(child).filter((redemption) => redemption.status === "pending").length;
   const monthlyEarnedPoints = getMonthlyEarnedPoints(child);
-  const redemptionLabel = pendingRedemptions ? `${pendingRedemptions}件` : "なし";
+  const monthlyAllowance = getMonthlyReceivedAllowanceTotal(child);
 
   return `
     <button class="card parent-child-status-card" type="button" data-route="/parent/children/${child.id}">
-      <span class="child-avatar parent-child-status-avatar">${escapeHtml(child.nickname.slice(0, 1))}</span>
       <span class="parent-child-status-main">
         <span class="parent-child-status-head">
-          <strong>${escapeHtml(child.nickname)}</strong>
-          <span>${getAvailablePoints(child).toLocaleString()}ポイント</span>
+          <span class="parent-child-status-name">
+            ${childAvatar(child, "parent-child-status-avatar")}
+            <strong>${escapeHtml(child.nickname)}</strong>
+          </span>
+          <span class="parent-child-status-detail">詳細を確認</span>
         </span>
-        <span class="parent-child-status-metrics">
-          <span>確認中 ${pendingApplications}件</span>
-          <span>今月付与 ${monthlyEarnedPoints.toLocaleString()}ポイント</span>
-          <span>おこづかい申請 ${redemptionLabel}</span>
+        <span class="parent-child-total-points">
+          <span>総保有ポイント</span>
+          <strong>${getAvailablePoints(child).toLocaleString()}pt</strong>
+        </span>
+        <span class="parent-child-status-groups">
+          <span class="parent-child-status-group">
+            <span class="parent-child-status-group-title">今月</span>
+            <span class="parent-child-status-row">
+              <span>ポイント</span>
+              <strong>${parentChildStatusValue(monthlyEarnedPoints, "pt")}</strong>
+            </span>
+            <span class="parent-child-status-row">
+              <span>おこづかい</span>
+              <strong>${parentChildStatusValue(monthlyAllowance, "円")}</strong>
+            </span>
+          </span>
+          <span class="parent-child-status-group">
+            <span class="parent-child-status-group-title">申請</span>
+            <span class="parent-child-status-row">
+              <span>やった！</span>
+              <strong>${parentChildStatusValue(pendingApplications, "件")}</strong>
+            </span>
+            <span class="parent-child-status-row">
+              <span>おこづかい</span>
+              <strong>${parentChildStatusValue(pendingRedemptions, "件")}</strong>
+            </span>
+          </span>
         </span>
       </span>
-      ${studyPayIcon("chevron-right", "settings-menu-chevron")}
     </button>
   `;
+}
+
+function parentChildStatusValue(value, unit) {
+  return `${Number(value || 0).toLocaleString()}<span class="parent-child-status-unit">${escapeHtml(unit)}</span>`;
 }
 
 function parentNotificationsView() {
@@ -877,7 +996,7 @@ function parentSettingsView() {
 
       <div class="settings-menu">
         ${settingsMenuButton("ボーナス設定", "/parent/monthly-bonus")}
-        ${settingsMenuButton("子ども管理", "/parent/children")}
+        ${settingsMenuButton("こども管理", "/parent/children")}
         ${settingsMenuButton("プラン・支払い設定", "/parent/billing")}
         ${settingsMenuButton("メールアドレス設定", "/parent/settings/email")}
         ${settingsMenuButton("パスワード変更", "/parent/settings/password")}
@@ -978,7 +1097,7 @@ function parentDataSettingsView() {
     `
       <div class="card detail-card danger-zone">
         ${flashMessage ? `<div class="success">${escapeHtml(flashMessage)}</div>` : ""}
-        <p class="card-copy">MVP検証用に、この端末に保存されているデータをバックアップできます。初期化すると登録情報・子ども・申請・通知が消えます。</p>
+        <p class="card-copy">MVP検証用に、この端末に保存されているデータをバックアップできます。初期化すると登録情報・こども・申請・通知が消えます。</p>
         <button class="primary-button compact-button" type="button" id="create-demo-data">デモデータを作成</button>
         <button class="secondary-button compact-button" type="button" id="export-prototype-data">データを書き出す</button>
         <button class="danger-button compact-button" type="button" id="show-reset-prototype-data">プロトタイプを初期化</button>
@@ -1020,7 +1139,7 @@ function parentDemoGuideView() {
         demoChild
           ? `
             <div class="card detail-card">
-              <span class="summary-kicker">子どもログイン</span>
+              <span class="summary-kicker">こどもログイン</span>
               <dl class="info-list">
                 <div><dt>名前</dt><dd>${escapeHtml(demoChild.nickname)}</dd></div>
                 <div><dt>ログインID</dt><dd>${escapeHtml(demoChild.loginId)}</dd></div>
@@ -1031,7 +1150,7 @@ function parentDemoGuideView() {
           : `
             <div class="card empty-state">
               <strong>デモデータがまだありません</strong>
-              <p>先にデモデータを作成すると、確認用の子ども・申請・ポイント履歴が入ります。</p>
+              <p>先にデモデータを作成すると、確認用のこども・申請・ポイント履歴が入ります。</p>
               <button class="primary-button" type="button" id="create-demo-data-from-guide">デモデータを作成</button>
             </div>
           `
@@ -1040,7 +1159,7 @@ function parentDemoGuideView() {
       <div class="demo-step-list">
         ${demoStep(1, "保護者で申請を見る", "確認待ち・承認済み・やり直しの状態を見ます。", "/parent/applications", Boolean(demoChild))}
         ${demoStep(2, "ポイントルールを見る", "科目ごとに点数とポイントが変えられることを確認します。", demoChild ? `/parent/children/${demoChild.id}/rules` : "", Boolean(demoChild))}
-        ${demoStep(3, "子どもでログイン", "別画面で子どもログインし、申請履歴とポイントを確認します。", "/child/login", Boolean(demoChild))}
+        ${demoStep(3, "こどもでログイン", "別画面でこどもログインし、申請履歴とポイントを確認します。", "/child/login", Boolean(demoChild))}
         ${demoStep(4, "おこづかい申請を見る", "申請中ポイントが仮で差し引かれることを確認します。", "/parent/redemptions", Boolean(demoChild))}
         ${demoStep(5, "履歴を確認", "ポイント付与・支給・取り消しの履歴を確認します。", demoChild ? `/parent/children/${demoChild.id}/points` : "", Boolean(demoChild))}
       </div>
@@ -1150,9 +1269,12 @@ function billingPlanCard(plan, subscription) {
 function parentApplicationsView() {
   const items = getParentApplications();
   const pendingItems = items.filter((item) => item.application.status === "pending");
+  const activeFilter = state.parentApplicationsFilter || "all";
+  const filteredItems = filterParentApplications(items, activeFilter);
   return `
     <section class="screen home-screen">
       ${parentPlainHeader("申請一覧")}
+      ${parentApplicationFilterRow(activeFilter)}
       <div class="page-heading settings-page-heading">
         <p>確認待ち ${pendingItems.length} 件</p>
       </div>
@@ -1160,14 +1282,52 @@ function parentApplicationsView() {
       <div class="application-list">
         ${
           items.length === 0
-            ? `<div class="card empty-state"><strong>申請はまだありません</strong><p>子どもから申請されるとここに表示されます。</p></div>`
-            : items.map(({ child, application }) => parentApplicationCard(child, application)).join("")
+            ? `<div class="card empty-state"><strong>申請はまだありません</strong><p>こどもから申請されるとここに表示されます。</p></div>`
+            : filteredItems.length === 0
+              ? `<div class="card empty-state"><strong>表示できる申請はありません</strong><p>ほかのタグに切り替えて確認できます。</p></div>`
+              : filteredItems.map(({ child, application }) => parentApplicationCard(child, application)).join("")
         }
       </div>
 
       ${bottomNav("requests")}
     </section>
   `;
+}
+
+function parentApplicationFilterRow(activeFilter) {
+  return `
+    <div class="parent-application-filter-row" aria-label="申請タグ">
+      ${parentApplicationFilterButton("all", "すべて", activeFilter)}
+      ${parentApplicationFilterButton("pending", "確認待ち", activeFilter)}
+      ${parentApplicationFilterButton("approved", "承認済み", activeFilter)}
+      ${parentApplicationFilterButton("redo", "やり直し", activeFilter)}
+    </div>
+  `;
+}
+
+function parentApplicationFilterButton(value, label, activeFilter) {
+  const isActive = value === activeFilter;
+  return `
+    <button class="filter-${value} ${isActive ? "active" : ""}" type="button" data-parent-application-filter="${value}" aria-pressed="${isActive ? "true" : "false"}">
+      ${label}
+    </button>
+  `;
+}
+
+function filterParentApplications(items, filter) {
+  if (filter === "pending") {
+    return items.filter((item) => item.application.status === "pending");
+  }
+
+  if (filter === "approved") {
+    return items.filter((item) => item.application.status === "approved" || item.application.status === "approval_canceled");
+  }
+
+  if (filter === "redo") {
+    return items.filter((item) => ["returned", "rejected", "canceled"].includes(item.application.status));
+  }
+
+  return items;
 }
 
 function adminShell(title, content) {
@@ -1181,7 +1341,7 @@ function adminShell(title, content) {
         <nav class="admin-nav" aria-label="運営メニュー">
           <button type="button" data-route="/admin">ダッシュボード</button>
           <button type="button" data-route="/admin/parents">保護者</button>
-          <button type="button" data-route="/admin/children">子ども</button>
+          <button type="button" data-route="/admin/children">こども</button>
           <button type="button" data-route="/admin/applications">申請</button>
         </nav>
       </aside>
@@ -1211,7 +1371,7 @@ function adminDashboardView() {
     `
       <div class="admin-stats">
         ${adminStat("保護者", account ? "1" : "0")}
-        ${adminStat("子ども", String(children.length))}
+        ${adminStat("こども", String(children.length))}
         ${adminStat("確認待ち申請", String(pendingCount))}
         ${adminStat("承認済み申請", String(approvedCount))}
         ${adminStat("契約状態", subscriptionLabel(subscription.status))}
@@ -1235,7 +1395,7 @@ function adminParentsView() {
           account
             ? `
               <table class="admin-table">
-                <thead><tr><th>ニックネーム</th><th>メール</th><th>契約</th><th>プラン</th><th>次回更新</th><th>子ども数</th><th>登録日</th></tr></thead>
+                <thead><tr><th>ニックネーム</th><th>メール</th><th>契約</th><th>プラン</th><th>次回更新</th><th>こども数</th><th>登録日</th></tr></thead>
                 <tbody>
                   <tr>
                     <td>${escapeHtml(account.nickname)}</td>
@@ -1259,7 +1419,7 @@ function adminParentsView() {
 function adminChildrenView() {
   const children = getAllChildren();
   return adminShell(
-    "子ども一覧",
+    "こども一覧",
     `
       <div class="admin-panel">
         ${
@@ -1281,7 +1441,7 @@ function adminChildrenView() {
                 </tbody>
               </table>
             `
-            : `<div class="notice-card">子どもデータはまだありません。</div>`
+            : `<div class="notice-card">こどもデータはまだありません。</div>`
         }
       </div>
     `,
@@ -1316,7 +1476,7 @@ function adminApplicationsTable(items) {
 
   return `
     <table class="admin-table">
-      <thead><tr><th>日付</th><th>子ども</th><th>分類</th><th>科目</th><th>状態</th><th>ポイント</th></tr></thead>
+      <thead><tr><th>日付</th><th>こども</th><th>分類</th><th>科目</th><th>状態</th><th>ポイント</th></tr></thead>
       <tbody>
         ${items.map(({ child, application }) => `
           <tr>
@@ -1335,20 +1495,48 @@ function adminApplicationsTable(items) {
 
 function parentApplicationCard(child, application) {
   return `
-    <div class="card application-card">
-      <div>
-        <span class="status-pill ${application.status}">${statusLabel(application.status)}</span>
-        <h2>${escapeHtml(child.nickname)}・${categoryLabel(application.category)}${application.subjectName ? `・${escapeHtml(application.subjectName)}` : ""}</h2>
-        <p>${applicationSummary(application)}</p>
+    <div class="card application-card" data-route="/parent/applications/${application.id}" role="button" tabindex="0">
+      <div class="application-card-header">
+        <div class="application-card-child">
+          ${childAvatar(child, "application-card-avatar")}
+          <span class="application-card-child-name">${escapeHtml(child.nickname)}</span>
+        </div>
+        <div class="application-card-title">
+          <h2>${parentApplicationCardTitle(application)}</h2>
+          <div class="application-card-score-line">
+            ${parentApplicationCardSummary(application)}
+          </div>
+        </div>
+        <div class="application-card-aside">
+          <time datetime="${escapeHtml(application.submittedAt)}">${new Date(application.submittedAt).toLocaleDateString("ja-JP")}</time>
+          <span class="status-pill ${application.status}">${statusLabel(application.status)}</span>
+          <strong>${applicationPointLabel(application)}</strong>
+        </div>
+        ${studyPayIcon("chevron-right", "application-card-chevron")}
       </div>
       ${photoThumbnails(application)}
-      <div class="application-meta">
-        <span>${new Date(application.submittedAt).toLocaleDateString("ja-JP")}</span>
-        <strong>${applicationPointLabel(application)}</strong>
-      </div>
-      <button class="secondary-button compact-button" type="button" data-route="/parent/applications/${application.id}">詳細を見る</button>
     </div>
   `;
+}
+
+function parentApplicationCardTitle(application) {
+  const category = categoryLabel(application.category);
+  const subject = application.subjectName || category;
+  return `${escapeHtml(subject)}（${escapeHtml(category)}）`;
+}
+
+function parentApplicationCardSummary(application) {
+  if (application.category === "test") {
+    const fullScore = Number(application.testFullScore) || 100;
+    return `
+      <p>
+        <strong class="application-card-score">${Number(application.score || 0).toLocaleString()}</strong>
+        <span class="application-card-score-unit"> / ${fullScore.toLocaleString()} 点</span>
+      </p>
+    `;
+  }
+
+  return `<p>${applicationSummary(application)}</p>`;
 }
 
 function parentApplicationDetailView(child, application) {
@@ -1447,7 +1635,7 @@ function parentRedemptionsView() {
       <div class="application-list">
         ${
           items.length === 0
-            ? `<div class="card empty-state"><strong>おこづかい申請はまだありません</strong><p>子どもから申請されるとここに表示されます。</p></div>`
+            ? `<div class="card empty-state"><strong>おこづかい申請はまだありません</strong><p>こどもから申請されるとここに表示されます。</p></div>`
             : items.map(({ child, redemption }) => parentRedemptionCard(child, redemption)).join("")
         }
       </div>
@@ -1502,11 +1690,11 @@ function parentMonthlyBonusView() {
               <div class="monthly-card-head">
                 <div>
                   <span class="summary-kicker">今月の確認</span>
-                  <h2>${escapeHtml(selectedChild?.nickname || "子ども")}への追加ポイント</h2>
+                  <h2>${escapeHtml(selectedChild?.nickname || "こども")}への追加ポイント</h2>
                 </div>
               </div>
               <div class="field">
-                <label for="monthly-bonus-child">対象の子ども</label>
+                <label for="monthly-bonus-child">対象のこども</label>
                 <select id="monthly-bonus-child" name="childId">
                   ${children.map((child) => `<option value="${escapeHtml(child.id)}" ${selectedAttr(selectedChild?.id, child.id)}>${escapeHtml(child.nickname)}</option>`).join("")}
                 </select>
@@ -1521,7 +1709,7 @@ function parentMonthlyBonusView() {
                   <strong>${targetMonth.replace("-", "年")}月</strong>
                 </div>
               </div>
-              <p class="card-copy">子どもの申請とは別に、保護者が確認してから付与します。何もしなければポイントは増えません。</p>
+              <p class="card-copy">こどもの申請とは別に、保護者が確認してから付与します。何もしなければポイントは増えません。</p>
             </form>
 
             <form class="card form form-card monthly-reference-form" id="monthly-bonus-reference-form">
@@ -1582,7 +1770,7 @@ function parentMonthlyBonusView() {
               ${monthlyBonusList(selectedChild)}
             </div>
           `
-          : `<div class="card empty-state"><strong>子どもがまだ登録されていません</strong><p>月次ボーナスを使うには、先に子どもを追加してください。</p><button class="primary-button compact-button" type="button" data-route="/parent/children/new">子どもを追加する</button></div>`
+          : `<div class="card empty-state"><strong>こどもがまだ登録されていません</strong><p>月次ボーナスを使うには、先にこどもを追加してください。</p><button class="primary-button compact-button" type="button" data-route="/parent/children/new">こどもを追加する</button></div>`
       }
 
       ${bottomNav("home")}
@@ -1719,8 +1907,8 @@ function childrenPreview(children) {
     return `
       <div class="card empty-state">
         <div>
-          <strong>まだ子どもが登録されていません</strong>
-          <p>子どもを追加すると、ポイント残高やログイン情報をここから確認できます。</p>
+          <strong>まだこどもが登録されていません</strong>
+          <p>こどもを追加すると、ポイント残高やログイン情報をここから確認できます。</p>
         </div>
       </div>
     `;
@@ -1738,7 +1926,7 @@ function childrenView() {
   const canAdd = children.length < MAX_CHILDREN;
   return `
     <section class="screen home-screen">
-      ${parentSettingsHeader("子ども管理")}
+      ${parentSettingsHeader("こども管理")}
       <div class="page-heading children-page-heading">
         <p>お子様は最大３名まで登録できます。</p>
       </div>
@@ -1751,7 +1939,7 @@ function childrenView() {
         }
       </div>
 
-      ${canAdd ? `<button class="primary-button children-add-button" type="button" data-route="/parent/children/new">子どもを追加する</button>` : `<div class="notice-card">登録できる子どもは最大${MAX_CHILDREN}人です。</div>`}
+      ${canAdd ? `<button class="primary-button children-add-button" type="button" data-route="/parent/children/new">こどもを追加する</button>` : `<div class="notice-card">登録できるこどもは最大${MAX_CHILDREN}人です。</div>`}
 
       ${bottomNav("children")}
     </section>
@@ -1765,39 +1953,48 @@ function childNewView() {
   const generatedPassword = generatePassword();
   return `
     <section class="screen home-screen">
-      ${parentHeader("子ども追加")}
-      <div class="page-heading">
-        <div>
-          <h1>子どもを追加</h1>
-          <p>ログインIDとパスワードを自動発行します。</p>
-        </div>
+      ${parentPlainHeader("こどもを追加", "/parent/children", "こども管理に戻る")}
+      <div class="page-heading settings-page-heading">
+        <p>ログインIDとパスワードを自動発行します。</p>
       </div>
 
       ${
         canAdd
           ? `
-            <form class="card form form-card" id="child-form">
+            <form class="card form form-card parent-child-form" id="child-form">
+              ${childProfilePhotoField()}
               <div class="field">
-                <label for="child-name">子どものニックネーム</label>
+                <label for="child-name">こどものニックネーム</label>
                 <input id="child-name" name="nickname" autocomplete="off" placeholder="例: はる" required />
               </div>
-              <div class="field">
-                <label for="child-login-id">ログインID</label>
-                <input id="child-login-id" name="loginId" autocomplete="off" value="${generatedLoginId}" readonly aria-readonly="true" />
+              <div class="issued-login-panel">
+                <div class="issued-login-heading">
+                  <span>${studyPayIcon("key-round", "issued-login-icon")}</span>
+                  <strong>こども用ログイン情報</strong>
+                </div>
+                <div class="issued-login-grid">
+                  <div class="field issued-login-field">
+                    <label for="child-login-id">ログインID</label>
+                    <input id="child-login-id" name="loginId" autocomplete="off" value="${generatedLoginId}" readonly aria-readonly="true" />
+                  </div>
+                  <div class="field issued-login-field">
+                    <label for="child-password">パスワード</label>
+                    <input id="child-password" name="password" autocomplete="off" value="${generatedPassword}" readonly aria-readonly="true" />
+                  </div>
+                </div>
+                <p class="issued-login-note">お子様用のログインIDとパスワードは自動発行されます。お子様用のログインIDとパスワードは設定＞こども管理からいつでも確認できます。</p>
               </div>
-              <div class="field">
-                <label for="child-password">パスワード</label>
-                <input id="child-password" name="password" autocomplete="off" value="${generatedPassword}" readonly aria-readonly="true" />
-              </div>
-              <div class="hint-card">
-                ログインIDとパスワードは自動発行され、変更できません。追加すると、国語・算数・英語の初期科目と標準ポイントルールの準備データを作ります。
+              <div class="hint-card parent-child-form-hint">
+                追加すると、国語・算数・英語の初期科目と標準ポイントルールの準備データを作ります。
               </div>
               <div class="error" id="child-error"></div>
-              <button class="primary-button" type="submit">追加する</button>
-              <button class="secondary-button" type="button" data-route="/parent/children">キャンセル</button>
+              <div class="parent-child-form-actions">
+                <button class="primary-button" type="submit">こどもを追加する</button>
+                <button class="secondary-button" type="button" data-route="/parent/children">キャンセル</button>
+              </div>
             </form>
           `
-          : `<div class="notice-card">子どもは最大${MAX_CHILDREN}人までです。</div>`
+          : `<div class="notice-card">こどもは最大${MAX_CHILDREN}人までです。</div>`
       }
 
       ${bottomNav("children")}
@@ -1805,20 +2002,55 @@ function childNewView() {
   `;
 }
 
+function childProfilePhotoField(profilePhoto = null) {
+  const photo = profilePhoto?.dataUrl;
+  const preview = photo
+    ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(profilePhoto?.name || "プロフィール写真")}" />`
+    : studyPayIcon("circle-user-round", "profile-photo-placeholder-icon");
+
+  return `
+    <div class="profile-photo-field">
+      <span class="profile-photo-label">プロフィール写真</span>
+      <div class="profile-photo-control">
+        <div class="profile-photo-stack">
+          <div class="profile-photo-preview" id="profile-photo-preview" aria-hidden="true">
+            ${preview}
+          </div>
+          <button class="profile-photo-button" type="button" data-profile-photo-button aria-label="写真を追加">
+            ${studyPayIcon("camera", "profile-photo-camera-icon")}
+          </button>
+          <div class="profile-photo-menu" data-profile-photo-menu hidden>
+            <button type="button" data-profile-photo-action="camera">写真を撮る</button>
+            <button type="button" data-profile-photo-action="library">写真から選択</button>
+            <button type="button" data-profile-photo-action="reset">デフォルトに戻す</button>
+          </div>
+          <input class="profile-photo-input" type="file" accept="image/*" capture="environment" data-profile-photo-input="camera" aria-hidden="true" tabindex="-1" />
+          <input class="profile-photo-input" type="file" accept="image/*" data-profile-photo-input="library" aria-hidden="true" tabindex="-1" />
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function childDetailView(child) {
   return `
-    <section class="screen home-screen">
-      ${parentHeader("子ども詳細")}
-      <div class="page-heading">
-        <div>
+    <section class="screen home-screen parent-child-detail-screen">
+      ${parentPlainHeader("こども詳細", "/parent/children", "こども管理に戻る")}
+      <div class="child-detail-profile" data-child-detail-profile>
+        ${childProfilePhotoField(child.profilePhoto)}
+      </div>
+      <div class="page-heading child-detail-heading">
+        <div class="child-detail-name-row">
           <h1>${escapeHtml(child.nickname)}</h1>
-          <p>現在ポイント ${getAvailablePoints(child).toLocaleString()}pt</p>
+          <button class="child-detail-name-edit-button" type="button" id="edit-child-nickname" aria-label="ニックネームを変更">
+            ${studyPayIcon("square-pen", "child-detail-name-edit-icon")}
+          </button>
         </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent/children">一覧</button>
+        <p>現在ポイント ${getAvailablePoints(child).toLocaleString()}pt</p>
       </div>
 
       <div class="card detail-card">
-        <span class="summary-kicker">子どもログイン情報</span>
+        <span class="summary-kicker">こどもログイン情報</span>
         <dl class="info-list">
           <div>
             <dt>ログインID</dt>
@@ -1826,10 +2058,17 @@ function childDetailView(child) {
           </div>
           <div>
             <dt>パスワード</dt>
-            <dd>${escapeHtml(child.demoPassword)}</dd>
+            <dd>
+              <span class="child-detail-password-display" id="child-detail-password-display" data-password="${escapeHtml(child.demoPassword)}" data-visible="false">
+                <span class="child-detail-password-text">${maskedPassword()}</span>
+                <button class="password-visibility-button child-detail-password-toggle" type="button" id="toggle-child-detail-password" aria-label="パスワードを表示" aria-pressed="false">
+                  ${studyPayIcon("eye", "password-visibility-icon")}
+                </button>
+              </span>
+            </dd>
           </div>
         </dl>
-        <button class="secondary-button compact-button" type="button" id="reset-child-password">パスワードを再発行</button>
+        <button class="secondary-button compact-button" type="button" id="edit-child-password">パスワードを変更する</button>
         <p class="fine-print">本番ではパスワードを平文表示せず、再設定フローで扱います。</p>
       </div>
 
@@ -1855,12 +2094,12 @@ function childDetailView(child) {
       </div>
 
       <div class="card detail-card danger-zone">
-        <span class="summary-kicker">子ども管理</span>
+        <span class="summary-kicker">こども管理</span>
         <p class="card-copy">削除すると一覧に表示されなくなり、登録人数のカウントから外れます。</p>
-        <button class="danger-button compact-button" type="button" id="delete-child-button">子どもを削除</button>
+        <button class="danger-button compact-button" type="button" id="delete-child-button">こどもを削除</button>
         <div class="confirm-panel hidden" id="delete-child-confirm">
           <strong>${escapeHtml(child.nickname)}を削除しますか？</strong>
-          <p>削除後は子ども一覧に表示されません。</p>
+          <p>削除後はこども一覧に表示されません。</p>
           <div class="confirm-actions">
             <button class="danger-button" type="button" id="confirm-delete-child">削除する</button>
             <button class="secondary-button" type="button" id="cancel-delete-child">キャンセル</button>
@@ -2002,7 +2241,7 @@ function pointRulesView(child) {
             </button>
           `).join("")}
         </div>
-        <p class="fine-print">子どものおこづかい申請で使う単位です。</p>
+        <p class="fine-print">こどものおこづかい申請で使う単位です。</p>
       </div>
 
       ${bottomNav("children")}
@@ -2096,9 +2335,9 @@ function gradeRulesPanel(child, subject, selectedGradeType) {
 function notFoundView() {
   return `
     <section class="screen home-screen">
-      ${parentHeader("子ども")}
+      ${parentHeader("こども")}
       <div class="card empty-state">
-        <strong>子ども情報が見つかりません</strong>
+        <strong>こども情報が見つかりません</strong>
         <button class="primary-button" type="button" data-route="/parent/children">一覧に戻る</button>
       </div>
       ${bottomNav("children")}
@@ -2136,7 +2375,7 @@ function parentHeader(label) {
 function childCard(child) {
   return `
     <button class="card child-card" type="button" data-route="/parent/children/${child.id}">
-      <span class="child-avatar">${escapeHtml(child.nickname.slice(0, 1))}</span>
+      ${childAvatar(child)}
       <span class="child-main">
         <strong>${escapeHtml(child.nickname)}</strong>
         <span>ID: ${escapeHtml(child.loginId)}</span>
@@ -2150,8 +2389,8 @@ function emptyChildren() {
   return `
     <div class="card empty-state">
       <div>
-        <strong>子どもを追加しましょう</strong>
-        <p>追加後に、子ども用のログインIDとパスワードを確認できます。</p>
+        <strong>こどもを追加しましょう</strong>
+        <p>追加後に、こども用のログインIDとパスワードを確認できます。</p>
       </div>
     </div>
   `;
@@ -2743,9 +2982,21 @@ function childHeader(label) {
         <img class="header-logo-image child-header-logo-image" src="./logo.png" alt="スタディペイ" />
       </div>
       <div class="child-profile-pill">
-        <span>${escapeHtml(child?.nickname || label)}</span>
+        <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">
+          ${childAvatar(child, "child-account-avatar")}
+          <span>${escapeHtml(child?.nickname || label)}</span>
+        </button>
+        ${childParentSwitchMenu()}
         <button class="text-button" type="button" id="child-logout-button">ログアウト</button>
       </div>
+    </div>
+  `;
+}
+
+function childParentSwitchMenu() {
+  return `
+    <div class="child-parent-switch-menu" id="child-parent-switch-menu" role="menu" hidden>
+      <button type="button" role="menuitem" id="child-parent-switch-action">保護者アカウントに切り替える</button>
     </div>
   `;
 }
@@ -2760,7 +3011,7 @@ function childBottomNav(active) {
   ];
 
   return `
-    <nav class="bottom-nav child-bottom-nav" aria-label="子どもメニュー">
+    <nav class="bottom-nav child-bottom-nav" aria-label="こどもメニュー">
       ${items
         .map(
           ([key, icon, label, path]) => `
@@ -2906,7 +3157,7 @@ function bindChildLogin() {
       return;
     }
 
-    localStorage.setItem(CHILD_SESSION_KEY, child.id);
+    setChildSession(child);
     navigate("/child");
   });
 }
@@ -2915,7 +3166,7 @@ function loginAsDemoChild() {
   createDemoData();
   const child = findDemoChild();
   if (child) {
-    localStorage.setItem(CHILD_SESSION_KEY, child.id);
+    setChildSession(child);
     navigate("/child");
   }
 }
@@ -2941,11 +3192,51 @@ function bindAdminLogin() {
 
 function bindParentHome() {
   bindParentShell();
+  const trigger = document.querySelector("#parent-child-switch-trigger");
+  const menu = document.querySelector("#parent-child-switch-menu");
+
+  trigger?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (!menu) {
+      navigate("/parent/children/new");
+      return;
+    }
+
+    const nextHidden = !menu.hidden;
+    menu.hidden = nextHidden;
+    trigger.setAttribute("aria-expanded", String(!nextHidden));
+  });
+
+  menu?.querySelectorAll("[data-switch-child-id]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const child = getChildren().find((item) => item.id === button.dataset.switchChildId);
+      if (child) {
+        setChildSession(child);
+      }
+      navigate("/child");
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!menu || menu.hidden || event.target.closest(".parent-header-switch")) {
+      return;
+    }
+
+    menu.hidden = true;
+    trigger?.setAttribute("aria-expanded", "false");
+  });
 }
 
 function bindParentApplications() {
   bindParentShell();
   bindPhotoViewer();
+  document.querySelectorAll("[data-parent-application-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.parentApplicationsFilter = button.dataset.parentApplicationFilter || "all";
+      render();
+    });
+  });
 }
 
 function bindParentRedemptions() {
@@ -3234,13 +3525,15 @@ function bindChildNew() {
     return;
   }
 
-  form.addEventListener("submit", (event) => {
+  bindProfilePhotoPicker(form);
+
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const children = getChildren();
     const error = document.querySelector("#child-error");
 
     if (children.length >= MAX_CHILDREN) {
-      error.textContent = `子どもは最大${MAX_CHILDREN}人までです。`;
+      error.textContent = `こどもは最大${MAX_CHILDREN}人までです。`;
       return;
     }
 
@@ -3255,14 +3548,83 @@ function bindChildNew() {
     }
 
     if (children.some((child) => child.loginId === loginId)) {
-      error.textContent = "同じログインIDの子どもがいます。";
+      error.textContent = "同じログインIDのこどもがいます。";
       return;
     }
 
-    const child = createChild({ nickname, loginId, password });
+    const profilePhoto = form._profilePhotoFile ? (await readPhotoFiles([form._profilePhotoFile]))[0] : null;
+    const child = createChild({ nickname, profilePhoto, loginId, password });
     addChild(child);
     navigate(`/parent/children/${child.id}`);
   });
+}
+
+function bindProfilePhotoPicker(container, { onFileSelected, onReset } = {}) {
+  const profilePhotoMenu = container.querySelector("[data-profile-photo-menu]");
+  const profilePhotoButton = container.querySelector("[data-profile-photo-button]");
+  profilePhotoButton?.addEventListener("click", () => {
+    if (profilePhotoMenu) {
+      profilePhotoMenu.hidden = !profilePhotoMenu.hidden;
+    }
+  });
+
+  container.addEventListener("click", (event) => {
+    if (!event.target.closest(".profile-photo-stack") && profilePhotoMenu) {
+      profilePhotoMenu.hidden = true;
+    }
+  });
+
+  container.querySelectorAll("[data-profile-photo-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.profilePhotoAction === "reset") {
+        container._profilePhotoFile = null;
+        container.querySelectorAll("[data-profile-photo-input]").forEach((input) => {
+          input.value = "";
+        });
+        updateProfilePhotoPreview(null);
+        onReset?.();
+        if (profilePhotoMenu) {
+          profilePhotoMenu.hidden = true;
+        }
+        return;
+      }
+
+      const input = container.querySelector(`[data-profile-photo-input="${button.dataset.profilePhotoAction}"]`);
+      if (profilePhotoMenu) {
+        profilePhotoMenu.hidden = true;
+      }
+      input?.click();
+    });
+  });
+
+  container.querySelectorAll("[data-profile-photo-input]").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0] || null;
+      container._profilePhotoFile = file;
+      updateProfilePhotoPreview(file);
+      if (file) {
+        await onFileSelected?.(file);
+      }
+    });
+  });
+}
+
+function updateProfilePhotoPreview(file) {
+  const preview = document.querySelector("#profile-photo-preview");
+  if (!preview) {
+    return;
+  }
+
+  if (!file) {
+    preview.innerHTML = studyPayIcon("circle-user-round", "profile-photo-placeholder-icon");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    preview.innerHTML = `<img src="${escapeHtml(String(reader.result || ""))}" alt="選択したプロフィール写真" />`;
+  };
+  reader.readAsDataURL(file);
 }
 
 function bindChildDetail(child) {
@@ -3271,10 +3633,29 @@ function bindChildDetail(child) {
     return;
   }
 
-  document.querySelector("#reset-child-password")?.addEventListener("click", () => {
-    const nextPassword = generatePassword();
-    updateChild(child.id, { demoPassword: nextPassword });
-    render();
+  const profilePhotoContainer = document.querySelector("[data-child-detail-profile]");
+  if (profilePhotoContainer) {
+    bindProfilePhotoPicker(profilePhotoContainer, {
+      onFileSelected: async (file) => {
+        const [profilePhoto] = await readPhotoFiles([file]);
+        updateChild(child.id, { profilePhoto });
+      },
+      onReset: () => {
+        updateChild(child.id, { profilePhoto: null });
+      },
+    });
+  }
+
+  document.querySelector("#edit-child-password")?.addEventListener("click", () => {
+    showChildPasswordModal(child);
+  });
+
+  document.querySelector("#toggle-child-detail-password")?.addEventListener("click", () => {
+    toggleChildDetailPassword();
+  });
+
+  document.querySelector("#edit-child-nickname")?.addEventListener("click", () => {
+    showChildNicknameModal(child);
   });
 
   document.querySelector("#delete-child-button")?.addEventListener("click", () => {
@@ -3288,6 +3669,148 @@ function bindChildDetail(child) {
   document.querySelector("#confirm-delete-child")?.addEventListener("click", () => {
     updateChild(child.id, { status: "deleted", deletedAt: new Date().toISOString() });
     navigate("/parent/children");
+  });
+}
+
+function maskedPassword() {
+  return "●●●●●●";
+}
+
+function isValidChildPassword(password) {
+  return /^[A-Za-z0-9]{6,}$/.test(password);
+}
+
+function toggleChildDetailPassword() {
+  const display = document.querySelector("#child-detail-password-display");
+  const text = display?.querySelector(".child-detail-password-text");
+  const toggle = document.querySelector("#toggle-child-detail-password");
+  if (!display || !text || !toggle) {
+    return;
+  }
+
+  const isVisible = display.dataset.visible === "true";
+  display.dataset.visible = String(!isVisible);
+  text.textContent = isVisible ? maskedPassword() : display.dataset.password || "";
+  toggle.setAttribute("aria-label", isVisible ? "パスワードを表示" : "パスワードを非表示");
+  toggle.setAttribute("aria-pressed", String(!isVisible));
+  toggle.innerHTML = studyPayIcon(isVisible ? "eye" : "eye-off", "password-visibility-icon");
+}
+
+function showChildNicknameModal(child) {
+  document.querySelector("#child-nickname-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal child-nickname-modal";
+  modal.id = "child-nickname-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="child-nickname-title">
+      <h2 id="child-nickname-title">ニックネームを変更</h2>
+      <form class="form parent-switch-form" id="child-nickname-form">
+        <div class="field">
+          <label for="child-nickname-input">ニックネーム</label>
+          <input id="child-nickname-input" name="nickname" type="text" autocomplete="off" value="${escapeHtml(child.nickname)}" required />
+        </div>
+        <div class="error" id="child-nickname-error"></div>
+        <button class="primary-button" type="submit">保存する</button>
+        <button class="secondary-button" type="button" id="cancel-child-nickname">キャンセル</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  document.querySelector("#cancel-child-nickname")?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  const input = document.querySelector("#child-nickname-input");
+  input?.focus();
+  input?.select();
+  document.querySelector("#child-nickname-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const nickname = String(new FormData(event.currentTarget).get("nickname") || "").trim();
+    const error = document.querySelector("#child-nickname-error");
+    if (!nickname) {
+      error.textContent = "ニックネームを入力してください。";
+      return;
+    }
+
+    updateChild(child.id, { nickname });
+    closeModal();
+    render();
+  });
+}
+
+function showChildPasswordModal(child) {
+  document.querySelector("#child-password-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal child-password-modal";
+  modal.id = "child-password-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="child-password-title">
+      <h2 id="child-password-title">${escapeHtml(child.nickname)}のパスワード変更</h2>
+      <form class="form parent-switch-form" id="child-password-form">
+        <div class="field">
+          <label for="child-password-input">新しいパスワード</label>
+          <div class="password-input-wrap">
+            <input id="child-password-input" name="password" type="password" autocomplete="off" value="${escapeHtml(child.demoPassword)}" required />
+            <button class="password-visibility-button" type="button" id="toggle-child-password" aria-label="パスワードを表示" aria-pressed="false">
+              ${studyPayIcon("eye", "password-visibility-icon")}
+            </button>
+          </div>
+          <span class="field-help">英数字6文字以上で入力してください。</span>
+        </div>
+        <div class="error" id="child-password-error"></div>
+        <button class="primary-button" type="submit">保存する</button>
+        <button class="secondary-button" type="button" id="cancel-child-password">キャンセル</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  document.querySelector("#cancel-child-password")?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  const input = document.querySelector("#child-password-input");
+  const toggle = document.querySelector("#toggle-child-password");
+  input?.focus();
+  input?.select();
+  toggle?.addEventListener("click", () => {
+    const isVisible = input?.type === "text";
+    if (!input) {
+      return;
+    }
+
+    input.type = isVisible ? "password" : "text";
+    toggle.setAttribute("aria-label", isVisible ? "パスワードを表示" : "パスワードを非表示");
+    toggle.setAttribute("aria-pressed", String(!isVisible));
+    toggle.innerHTML = studyPayIcon(isVisible ? "eye" : "eye-off", "password-visibility-icon");
+    input.focus();
+  });
+  document.querySelector("#child-password-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const password = String(new FormData(event.currentTarget).get("password") || "").trim();
+    const error = document.querySelector("#child-password-error");
+    if (!isValidChildPassword(password)) {
+      error.textContent = "パスワードは英数字6文字以上で入力してください。";
+      return;
+    }
+
+    updateChild(child.id, {
+      demoPassword: password,
+      passwordUpdatedAt: new Date().toISOString(),
+    });
+    closeModal();
+    render();
   });
 }
 
@@ -3737,7 +4260,11 @@ function bindChildHistory(child) {
 
 function bindPhotoViewer() {
   document.querySelectorAll(".thumbnail-button").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+    });
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
       showPhotoModal(button.dataset.photoSrc, button.dataset.photoName);
     });
   });
@@ -3745,9 +4272,113 @@ function bindPhotoViewer() {
 
 function bindChildShell() {
   bindRouteButtons();
+  bindChildParentSwitchMenu();
   document.querySelector("#child-logout-button")?.addEventListener("click", () => {
     clearChildSession();
     navigate("/");
+  });
+}
+
+function bindChildParentSwitchMenu() {
+  const trigger = document.querySelector("#child-parent-switch-trigger");
+  const menu = document.querySelector("#child-parent-switch-menu");
+
+  trigger?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleChildParentSwitchMenu();
+  });
+
+  document.querySelector("#child-parent-switch-action")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeChildParentSwitchMenu();
+    showParentSwitchPasswordModal();
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!menu || menu.hidden || event.target.closest(".child-profile-pill, .child-design-profile-wrap")) {
+      return;
+    }
+
+    closeChildParentSwitchMenu();
+  });
+}
+
+function toggleChildParentSwitchMenu() {
+  const trigger = document.querySelector("#child-parent-switch-trigger");
+  const menu = document.querySelector("#child-parent-switch-menu");
+
+  if (!menu) {
+    return;
+  }
+
+  const shouldOpen = menu.hidden;
+  menu.hidden = !shouldOpen;
+  trigger?.setAttribute("aria-expanded", String(shouldOpen));
+}
+
+function closeChildParentSwitchMenu() {
+  const trigger = document.querySelector("#child-parent-switch-trigger");
+  const menu = document.querySelector("#child-parent-switch-menu");
+
+  if (menu) {
+    menu.hidden = true;
+  }
+  trigger?.setAttribute("aria-expanded", "false");
+}
+
+function showParentSwitchPasswordModal() {
+  const parent = loadAccount();
+  if (!parent) {
+    navigate("/login");
+    return;
+  }
+
+  document.querySelector("#parent-switch-password-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal";
+  modal.id = "parent-switch-password-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="parent-switch-title">
+      <h2 id="parent-switch-title">保護者に切り替え</h2>
+      <p>保護者アカウントのパスワードを入力してください。</p>
+      <form class="form parent-switch-form" id="parent-switch-password-form">
+        <div class="field">
+          <label for="parent-switch-password">パスワード</label>
+          <input id="parent-switch-password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="error" id="parent-switch-error"></div>
+        <button class="primary-button" type="submit">保護者に切り替える</button>
+        <button class="secondary-button" type="button" id="cancel-parent-switch">キャンセル</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  document.querySelector("#cancel-parent-switch")?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  document.querySelector("#parent-switch-password")?.focus();
+  document.querySelector("#parent-switch-password-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const password = String(new FormData(event.currentTarget).get("password") || "");
+    const error = document.querySelector("#parent-switch-error");
+
+    if (password !== parent.demoPassword) {
+      error.textContent = "パスワードが一致しません。";
+      return;
+    }
+
+    localStorage.setItem(SESSION_KEY, "true");
+    state.parent = parent;
+    clearChildSession();
+    closeModal();
+    navigate("/parent");
   });
 }
 
@@ -3768,8 +4399,16 @@ function bindAdminShell() {
 }
 
 function bindRouteButtons() {
-  document.querySelectorAll("[data-route]").forEach((button) => {
-    button.addEventListener("click", () => navigate(button.dataset.route));
+  document.querySelectorAll("[data-route]").forEach((routeTarget) => {
+    routeTarget.addEventListener("click", () => navigate(routeTarget.dataset.route));
+    if (routeTarget.tagName !== "BUTTON") {
+      routeTarget.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          navigate(routeTarget.dataset.route);
+        }
+      });
+    }
   });
 }
 
@@ -3795,8 +4434,18 @@ function isAdminSignedIn() {
 }
 
 function getCurrentChild() {
-  const childId = localStorage.getItem(CHILD_SESSION_KEY);
-  return childId ? getAllChildren().find((child) => child.id === childId) : null;
+  const session = getChildSession();
+  if (!session?.childId) {
+    return null;
+  }
+
+  const child = getAllChildren().find((item) => item.id === session.childId);
+  if (!isChildSessionValid(child, session)) {
+    clearChildSession();
+    return null;
+  }
+
+  return child;
 }
 
 function findChildByCredentials(loginId, password) {
@@ -4641,10 +5290,11 @@ function createTrialSubscription() {
   };
 }
 
-function createChild({ nickname, loginId, password }) {
+function createChild({ nickname, profilePhoto, loginId, password }) {
   return {
     id: `child-${Date.now()}`,
     nickname,
+    profilePhoto: profilePhoto || null,
     loginId,
     demoPassword: password,
     currentPoints: 0,
@@ -5375,6 +6025,10 @@ function studyPayIcon(name, className = "") {
       <path d="M10.268 21a2 2 0 0 0 3.464 0"/>
       <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.674C19.41 13.956 18 12.499 18 8a6 6 0 0 0-12 0c0 4.499-1.411 5.956-2.738 7.326"/>
     `,
+    camera: `
+      <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/>
+      <circle cx="12" cy="13" r="3"/>
+    `,
     "chevron-left": `<path d="m15 18-6-6 6-6"/>`,
     "chevron-right": `<path d="m9 18 6-6-6-6"/>`,
     "circle-alert": `
@@ -5395,6 +6049,16 @@ function studyPayIcon(name, className = "") {
       <circle cx="12" cy="10" r="4"/>
       <circle cx="12" cy="12" r="10"/>
     `,
+    eye: `
+      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
+      <circle cx="12" cy="12" r="3"/>
+    `,
+    "eye-off": `
+      <path d="M10.733 5.076A10.744 10.744 0 0 1 12 5c4.664 0 8.282 2.626 9.938 6.652a1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/>
+      <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/>
+      <path d="M17.479 17.499A10.75 10.75 0 0 1 12 19c-4.664 0-8.282-2.626-9.938-6.652a1 1 0 0 1 0-.696A10.75 10.75 0 0 1 6.602 6.35"/>
+      <path d="m2 2 20 20"/>
+    `,
     "hand-coins": `
       <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"/>
       <path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/>
@@ -5411,6 +6075,10 @@ function studyPayIcon(name, className = "") {
       <path d="M18 13a6 6 0 0 1-12 0h12Z"/>
       <line x1="9" x2="9.01" y1="9" y2="9"/>
       <line x1="15" x2="15.01" y1="9" y2="9"/>
+    `,
+    "key-round": `
+      <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/>
+      <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>
     `,
     settings: `
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>

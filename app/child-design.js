@@ -233,6 +233,7 @@
           <img class="header-logo-image child-header-logo-image" src="./logo.png" alt="スタディペイ" />
         </div>
         <div class="child-profile-pill">
+          ${typeof childAvatar === "function" ? childAvatar(child, "child-account-avatar") : ""}
           <span>${escapeHtml(child?.nickname || label)}</span>
           <button class="text-button" type="button" id="child-logout-button">ログアウト</button>
         </div>
@@ -250,7 +251,7 @@
     ];
 
     return `
-      <nav class="bottom-nav child-bottom-nav" aria-label="子どもメニュー">
+      <nav class="bottom-nav child-bottom-nav" aria-label="こどもメニュー">
         ${items
           .map(
             ([key, icon, label, path]) => `
@@ -448,7 +449,7 @@
   }
 
   function upgradeChildBottomNavDom(screen) {
-    const nav = screen.querySelector('nav[aria-label="子どもメニュー"], .bottom-nav');
+    const nav = screen.querySelector('nav[aria-label="こどもメニュー"], .bottom-nav');
     if (!nav) {
       return;
     }
