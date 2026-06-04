@@ -104,5 +104,5 @@
     `;
   }
 
-  window.StudyPayIcons = { icon };
+  window.INCEIcons = { icon };
 })();

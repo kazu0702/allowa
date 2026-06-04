@@ -200,7 +200,7 @@
       <div class="topbar child-topbar">
         <div class="brand">
           <span class="brand-mark child-brand-mark">S</span>
-          <span>スタディペイ</span>
+          <span>INCE</span>
         </div>
         <div class="child-profile-pill">
           <span>${escapeHtml(child?.nickname || label)}</span>
@@ -265,7 +265,7 @@
         <div class="topbar">
           <div class="brand">
             <span class="brand-mark">S</span>
-            <span>スタディペイ</span>
+            <span>INCE</span>
           </div>
           <button class="text-button" type="button" id="logout-button">ログアウト</button>
         </div>

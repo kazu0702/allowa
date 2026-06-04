@@ -20,8 +20,8 @@ MVP検証では、まずSupabase無料プランで親子データをクラウド
 Project Settings > Environment Variables に以下を追加する。
 
 ```text
-STUDYPAY_SUPABASE_URL=SupabaseのProject URL
-STUDYPAY_SUPABASE_ANON_KEY=Supabaseのanon public key
+INCE_SUPABASE_URL=SupabaseのProject URL
+INCE_SUPABASE_ANON_KEY=Supabaseのanon public key
 ```
 
 追加後、Vercelで再デプロイする。
@@ -46,7 +46,7 @@ URLとanon keyが公開される前提のため、本番化前にはSupabase Aut
 
 現在のSupabase同期は、公開版との互換性を優先して `app/cloud.js` から有効化している。
 
-- `localStorage` の `studypay_parent_account` 変更時に `account_snapshots` へupsertする。
+- `localStorage` の `ince_parent_account` 変更時に `account_snapshots` へupsertする。
 - 起動時にSupabase側の新しいスナップショットを取得する。
 - `app/index.html` ではSupabase CDN、`config.js`、`app.js`、`cloud.js` を読み込む。
 - `scripts/build.mjs` はVercel用に `config.js` を生成する。

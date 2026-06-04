@@ -1,18 +1,25 @@
 (function () {
   const STYLE_ID = "child-design-fix-style";
-  const ACCOUNT_KEY = "studypay_parent_account";
-  const CHILD_SESSION_KEY = "studypay_child_session";
-  const BALANCE_CARD_BG_KEY_PREFIX = "studypay_child_balance_card_bg:";
+  const ACCOUNT_KEY = "ince_parent_account";
+  const CHILD_SESSION_KEY = "ince_child_session";
+  const BALANCE_CARD_BG_KEY_PREFIX = "ince_child_balance_card_bg:";
+  const PULL_REFRESH_THRESHOLD = 76;
+  const PULL_REFRESH_MAX_DISTANCE = 112;
+  let pullRefreshStartY = 0;
+  let pullRefreshDistance = 0;
+  let isPullRefreshTracking = false;
+  let isPullRefreshing = false;
 
   ensureStyles();
   scheduleUpgrade();
   watchAppRender();
   bindDelegatedActions();
   bindHomeBackgroundActions();
+  bindPullToRefresh();
   bindLoginRedirectGuard();
 
   window.addEventListener("hashchange", scheduleUpgrade);
-  window.addEventListener("studypay:child-rendered", scheduleUpgrade);
+  window.addEventListener("ince:child-rendered", scheduleUpgrade);
 
   function bindDelegatedActions() {
     document.addEventListener("click", (event) => {
@@ -96,6 +103,145 @@
     });
   }
 
+  function bindPullToRefresh() {
+    document.addEventListener(
+      "touchstart",
+      (event) => {
+        const screen = event.target.closest?.(".child-design-home");
+        if (!screen || location.hash.replace("#", "") !== "/child" || isPullRefreshing) {
+          return;
+        }
+
+        if (screen.scrollTop > 0 || event.touches.length !== 1) {
+          return;
+        }
+
+        pullRefreshStartY = event.touches[0].clientY;
+        pullRefreshDistance = 0;
+        isPullRefreshTracking = true;
+      },
+      { passive: true },
+    );
+
+    document.addEventListener(
+      "touchmove",
+      (event) => {
+        if (!isPullRefreshTracking || isPullRefreshing || event.touches.length !== 1) {
+          return;
+        }
+
+        const screen = document.querySelector(".child-design-home");
+        if (!screen || screen.scrollTop > 0) {
+          resetPullRefresh(screen);
+          return;
+        }
+
+        const distance = Math.max(0, event.touches[0].clientY - pullRefreshStartY);
+        if (distance <= 0) {
+          return;
+        }
+
+        event.preventDefault();
+        pullRefreshDistance = Math.min(PULL_REFRESH_MAX_DISTANCE, distance * 0.55);
+        updatePullRefreshIndicator(screen, pullRefreshDistance);
+      },
+      { passive: false },
+    );
+
+    document.addEventListener(
+      "touchend",
+      () => {
+        if (!isPullRefreshTracking) {
+          return;
+        }
+
+        const screen = document.querySelector(".child-design-home");
+        isPullRefreshTracking = false;
+        if (!screen || pullRefreshDistance < PULL_REFRESH_THRESHOLD) {
+          resetPullRefresh(screen);
+          return;
+        }
+
+        runPullRefresh(screen);
+      },
+      { passive: true },
+    );
+
+    document.addEventListener(
+      "touchcancel",
+      () => {
+        isPullRefreshTracking = false;
+        resetPullRefresh(document.querySelector(".child-design-home"));
+      },
+      { passive: true },
+    );
+  }
+
+  function updatePullRefreshIndicator(screen, distance) {
+    if (!screen) {
+      return;
+    }
+
+    const indicator = screen.querySelector("[data-child-pull-refresh]");
+    const label = indicator?.querySelector("[data-child-pull-refresh-label]");
+    const ready = distance >= PULL_REFRESH_THRESHOLD;
+    screen.classList.add("is-pulling-refresh");
+    screen.classList.toggle("is-pull-refresh-ready", ready);
+    if (indicator) {
+      indicator.style.height = `${Math.round(distance)}px`;
+    }
+    if (label) {
+      label.textContent = ready ? "離して更新" : "下に引っ張って更新";
+    }
+  }
+
+  function resetPullRefresh(screen) {
+    pullRefreshDistance = 0;
+    if (!screen) {
+      return;
+    }
+
+    screen.classList.remove("is-pulling-refresh", "is-pull-refresh-ready", "is-refreshing");
+    const indicator = screen.querySelector("[data-child-pull-refresh]");
+    if (indicator) {
+      indicator.style.removeProperty("height");
+    }
+    const label = screen.querySelector("[data-child-pull-refresh-label]");
+    if (label) {
+      label.textContent = "下に引っ張って更新";
+    }
+  }
+
+  function runPullRefresh(screen) {
+    if (!screen || isPullRefreshing) {
+      return;
+    }
+
+    isPullRefreshing = true;
+    screen.classList.add("is-pulling-refresh", "is-refreshing");
+    screen.classList.remove("is-pull-refresh-ready");
+    const indicator = screen.querySelector("[data-child-pull-refresh]");
+    if (indicator) {
+      indicator.style.height = "72px";
+    }
+    const label = screen.querySelector("[data-child-pull-refresh-label]");
+    if (label) {
+      label.textContent = "更新中";
+    }
+
+    const refreshPromise =
+      typeof refreshChildAccountFromCloud === "function"
+        ? refreshChildAccountFromCloud("/child")
+        : Promise.resolve(false);
+
+    Promise.resolve(refreshPromise)
+      .finally(() => {
+        isPullRefreshing = false;
+        resetPullRefresh(document.querySelector(".child-design-home"));
+        scheduleUpgrade();
+      });
+  }
+
   function toggleBalanceBackgroundMenu() {
     const menu = document.querySelector("[data-child-balance-bg-menu]");
     if (!menu) {
@@ -125,8 +271,10 @@
     }
 
     input.value = "";
-    input.click();
     closeBalanceBackgroundMenu();
+    window.setTimeout(() => {
+      input.click();
+    }, 0);
   }
 
   function goToRoute(route) {
@@ -238,7 +386,7 @@
       return;
     }
 
-    const isBalanceBackgroundMenuOpen = !screen.querySelector("[data-child-balance-bg-menu]")?.hidden;
+    const isBalanceBackgroundMenuOpen = screen.querySelector("[data-child-balance-bg-menu]")?.hidden === false;
     const applications = getApplications(child);
     const availablePoints = getAvailablePoints(child);
     const maxPointsPreview = isMaxPointsPreview();
@@ -258,8 +406,8 @@
     screen.className = "screen home-screen child-theme child-design-home";
     screen.innerHTML = `
       <header class="child-design-topbar">
-        <div class="child-design-logo" aria-label="スタディペイ">
-          <img class="child-design-logo-image" src="./logo.png" alt="スタディペイ" />
+        <div class="child-design-logo" aria-label="INCE">
+          <img class="child-design-logo-image" src="./logo.svg?v=phase201" alt="INCE" />
         </div>
         <div class="child-design-profile-wrap">
           <button class="child-design-profile" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeText(child.nickname || "タロー")}">
@@ -271,6 +419,10 @@
           </div>
         </div>
       </header>
+      <div class="child-pull-refresh" data-child-pull-refresh aria-hidden="true">
+        <span class="child-pull-refresh-icon" aria-hidden="true">${lucideIcon("refresh-cw", "child-pull-refresh-svg")}</span>
+        <strong data-child-pull-refresh-label>下に引っ張って更新</strong>
+      </div>
 
       <section class="child-balance-card ${balanceBackground ? "has-custom-bg" : ""}"${balanceBackgroundStyle}>
         <div class="child-balance-copy">
@@ -489,15 +641,28 @@
     }
 
     photoField.classList.add("child-photo-field");
-    const drop = document.createElement("label");
+    photoInput.classList.add("child-photo-hidden-input");
+    photoInput.dataset.childPhotoInput = "library";
+    photoInput.setAttribute("accept", "image/*");
+    photoInput.setAttribute("multiple", "");
+
+    const cameraInput = document.createElement("input");
+    cameraInput.className = "child-photo-hidden-input";
+    cameraInput.type = "file";
+    cameraInput.accept = "image/*";
+    cameraInput.setAttribute("capture", "environment");
+    cameraInput.dataset.childPhotoInput = "camera";
+    cameraInput.setAttribute("aria-hidden", "true");
+    cameraInput.tabIndex = -1;
+
+    const drop = document.createElement("button");
     drop.className = "child-photo-drop";
-    drop.setAttribute("for", "application-photos");
+    drop.type = "button";
     drop.setAttribute("aria-label", "写真を選択");
     drop.innerHTML = `
       <span class="child-photo-lucide-icon" aria-hidden="true">${lucideIcon("camera", "child-photo-svg")}</span>
     `;
     photoInput.insertAdjacentElement("afterend", drop);
-    drop.appendChild(photoInput);
 
     const feedback = document.createElement("span");
     feedback.className = "child-photo-feedback";
@@ -509,6 +674,22 @@
     preview.setAttribute("aria-label", "選択した写真");
     feedback.insertAdjacentElement("afterend", preview);
 
+    const menu = document.createElement("div");
+    menu.className = "child-photo-menu";
+    menu.setAttribute("data-child-photo-menu", "");
+    menu.hidden = true;
+    menu.innerHTML = `
+      <label class="child-photo-menu-action" data-child-photo-action="camera">
+        <span>写真を撮る</span>
+      </label>
+      <label class="child-photo-menu-action" data-child-photo-action="library">
+        <span>写真から選択</span>
+      </label>
+    `;
+    preview.insertAdjacentElement("afterend", menu);
+    menu.querySelector('[data-child-photo-action="camera"]')?.appendChild(cameraInput);
+    menu.querySelector('[data-child-photo-action="library"]')?.appendChild(photoInput);
+
     const routeApplication = getRouteApplication();
     window.__studyPayExistingPhotos = [...(routeApplication?.photos || [])];
     window.__studyPayExistingPhotoNames = [...(routeApplication?.photoNames || [])];
@@ -518,8 +699,17 @@
     photoInput._studyPayFiles = window.__studyPaySelectedPhotoFiles;
     renderPhotoPreviewState(preview, feedback, photoInput, drop);
 
-    photoInput.addEventListener("change", async () => {
-      const incomingFiles = Array.from(photoInput.files || []);
+    const togglePhotoMenu = () => {
+      menu.hidden = !menu.hidden;
+    };
+    const closePhotoMenu = () => {
+      menu.hidden = true;
+    };
+    const closePhotoMenuAfterPickerOpen = () => {
+      window.setTimeout(closePhotoMenu, 300);
+    };
+    const handleInputChange = async (input) => {
+      const incomingFiles = Array.from(input.files || []);
       if (!incomingFiles.length) {
         await renderPhotoPreviewState(preview, feedback, photoInput, drop);
         return;
@@ -531,11 +721,35 @@
         Math.max(0, 3 - existingCount),
       );
       photoInput._studyPayFiles = window.__studyPaySelectedPhotoFiles;
-      photoInput.value = "";
+      input.value = "";
+      closePhotoMenu();
       await renderPhotoPreviewState(preview, feedback, photoInput, drop);
+    };
+
+    drop.addEventListener("click", (event) => {
+      event.preventDefault();
+      togglePhotoMenu();
     });
 
+    document.addEventListener("click", (event) => {
+      if (!photoField.contains(event.target)) {
+        closePhotoMenu();
+      }
+    });
+
+    photoInput.addEventListener("change", () => handleInputChange(photoInput));
+    cameraInput.addEventListener("change", () => handleInputChange(cameraInput));
+    photoInput.addEventListener("click", closePhotoMenuAfterPickerOpen);
+    cameraInput.addEventListener("click", closePhotoMenuAfterPickerOpen);
+
     preview.addEventListener("click", async (event) => {
+      const openButton = event.target.closest("[data-child-photo-open]");
+      if (openButton) {
+        event.preventDefault();
+        togglePhotoMenu();
+        return;
+      }
+
       const button = event.target.closest(".child-photo-remove-button");
       if (!button) {
         return;
@@ -588,6 +802,11 @@
         .map(
           (file) =>
             new Promise((resolve) => {
+              if (typeof window.studyPayCreateApplicationPhotoFromFile === "function") {
+                window.studyPayCreateApplicationPhotoFromFile(file).then(resolve).catch(() => resolve(null));
+                return;
+              }
+
               const reader = new FileReader();
               reader.onload = () => resolve({ name: file.name, dataUrl: String(reader.result || "") });
               reader.onerror = () => resolve(null);
@@ -616,20 +835,11 @@
       preview.insertAdjacentHTML(
         "beforeend",
         `
-          <label class="child-photo-preview-add" for="application-photos" aria-label="写真を追加">
+          <button class="child-photo-preview-add" type="button" data-child-photo-open aria-label="写真を追加">
             ${lucideIcon("camera", "child-photo-preview-add-icon")}
-          </label>
+          </button>
         `,
       );
-      const addButton = preview.querySelector(".child-photo-preview-add");
-      if (photoInput && addButton) {
-        addButton.appendChild(photoInput);
-      }
-      return;
-    }
-
-    if (photoInput && drop) {
-      drop.appendChild(photoInput);
     }
   }
 
@@ -662,7 +872,7 @@
     topbar.querySelector(".brand-mark")?.classList.add("child-brand-mark");
     const brandLabel = topbar.querySelector(".brand span:last-child");
     if (brandLabel) {
-      brandLabel.textContent = "スタディペイ";
+      brandLabel.textContent = "INCE";
     }
   }
 
@@ -1144,7 +1354,7 @@
   }
 
   function lucideIcon(name, className = "") {
-    return window.StudyPayIcons?.icon(name, className) || "";
+    return window.INCEIcons?.icon(name, className) || "";
   }
 
   function ensureStyles() {
@@ -1155,7 +1365,11 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
-      body,
+      html,
+      body {
+        background: #fff;
+      }
+
       .phone-shell,
       .app {
         background: #fffbf7;
@@ -1164,19 +1378,23 @@
       .child-design-home {
         min-height: 100dvh;
         padding: 0 20px 118px;
-        background: linear-gradient(180deg, #fff 0, #fff 70px, #fff8f1 70px, #fffaf6 100%);
+        background: linear-gradient(180deg, #fff 0, #fff calc(72px + env(safe-area-inset-top)), #fff8f1 calc(72px + env(safe-area-inset-top)), #fffaf6 100%);
         color: #16120e;
       }
 
       .child-design-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 40;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        height: 72px;
+        height: calc(72px + env(safe-area-inset-top));
         margin: 0 -20px 26px;
         border-bottom: 1px solid #f1e5dc;
         background: #fff;
-        padding: 0 22px;
+        padding: env(safe-area-inset-top) 22px 0;
+        box-shadow: 0 8px 18px rgba(60, 42, 24, 0.04);
       }
 
       .child-design-logo,
@@ -1195,6 +1413,58 @@
 
       .child-design-logo > span:last-child span {
         color: #ff8200;
+      }
+
+      .child-pull-refresh {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: 0;
+        margin: -18px 0 18px;
+        overflow: hidden;
+        color: #9a6500;
+        font-size: 13px;
+        font-weight: 900;
+        opacity: 0;
+        transform: translateY(-8px);
+        transition:
+          height 0.18s ease,
+          opacity 0.18s ease,
+          transform 0.18s ease;
+      }
+
+      .child-design-home.is-pulling-refresh .child-pull-refresh {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .child-design-home.is-pull-refresh-ready .child-pull-refresh {
+        color: #ff8200;
+      }
+
+      .child-pull-refresh-icon {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: #fff4e6;
+      }
+
+      .child-pull-refresh-svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .child-design-home.is-refreshing .child-pull-refresh-svg {
+        animation: child-refresh-spin 0.8s linear infinite;
+      }
+
+      @keyframes child-refresh-spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
 
       .child-design-profile-wrap {
@@ -2051,6 +2321,17 @@
         cursor: pointer;
       }
 
+      .child-photo-field input[type="file"].child-photo-hidden-input {
+        position: fixed;
+        inset: auto;
+        left: -9999px;
+        top: 0;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
       .child-photo-lucide-icon {
         display: grid;
         width: 40px;
@@ -2080,11 +2361,58 @@
         color: #ff8200;
         text-align: center;
         overflow: hidden;
+        cursor: pointer;
       }
 
       .child-photo-field .child-photo-drop,
       .child-photo-field .child-photo-preview-add {
         color: #ff8200;
+      }
+
+      .child-photo-menu {
+        display: grid;
+        gap: 8px;
+        width: min(100%, 220px);
+        margin-top: -2px;
+        padding: 8px;
+        border: 1px solid #f0dfcf;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 10px 24px rgba(72, 49, 30, 0.12);
+      }
+
+      .child-photo-menu[hidden] {
+        display: none;
+      }
+
+      .child-photo-menu-action {
+        position: relative;
+        display: grid;
+        place-items: center;
+        min-height: 42px;
+        border: 0;
+        border-radius: 10px;
+        background: #fff8ef;
+        color: #7a3d00;
+        font-size: 14px;
+        font-weight: 900;
+        text-align: center;
+        cursor: pointer;
+        overflow: hidden;
+      }
+
+      .child-photo-menu-action span {
+        pointer-events: none;
+      }
+
+      .child-photo-menu input[type="file"].child-photo-hidden-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        pointer-events: auto;
+        cursor: pointer;
       }
 
       .child-photo-drop.is-hidden {

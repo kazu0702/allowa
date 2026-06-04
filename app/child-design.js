@@ -230,7 +230,7 @@
     return `
       <div class="topbar child-topbar">
         <div class="brand">
-          <img class="header-logo-image child-header-logo-image" src="./logo.png" alt="スタディペイ" />
+          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase201" alt="INCE" />
         </div>
         <div class="child-profile-pill">
           ${typeof childAvatar === "function" ? childAvatar(child, "child-account-avatar") : ""}
@@ -324,8 +324,8 @@
   }
 
   function childDesignIcon(name, className = "") {
-    if (window.StudyPayIcons?.icon) {
-      return window.StudyPayIcons.icon(name, className);
+    if (window.INCEIcons?.icon) {
+      return window.INCEIcons.icon(name, className);
     }
 
     const fallbackIcons = {
@@ -444,7 +444,7 @@
 
     const brandLabel = topbar.querySelector(".brand span:last-child");
     if (brandLabel) {
-      brandLabel.textContent = "スタディペイ";
+      brandLabel.textContent = "INCE";
     }
   }
 

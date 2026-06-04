@@ -18,8 +18,8 @@
 
   function openChildApply() {
     const route = "/child/apply";
-    if (typeof window.studypayForceNavigate === "function") {
-      window.studypayForceNavigate(route);
+    if (typeof window.inceForceNavigate === "function") {
+      window.inceForceNavigate(route);
     } else if (typeof navigate === "function") {
       navigate(route);
     } else {
@@ -37,8 +37,8 @@
       return;
     }
 
-    if (typeof window.studypayForceNavigate === "function") {
-      window.studypayForceNavigate(route);
+    if (typeof window.inceForceNavigate === "function") {
+      window.inceForceNavigate(route);
     } else {
       window.dispatchEvent(new HashChangeEvent("hashchange"));
     }

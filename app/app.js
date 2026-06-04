@@ -1,7 +1,7 @@
-const ACCOUNT_KEY = "studypay_parent_account";
-const SESSION_KEY = "studypay_parent_session";
-const CHILD_SESSION_KEY = "studypay_child_session";
-const ADMIN_SESSION_KEY = "studypay_admin_session";
+const ACCOUNT_KEY = "ince_parent_account";
+const SESSION_KEY = "ince_parent_session";
+const CHILD_SESSION_KEY = "ince_child_session";
+const ADMIN_SESSION_KEY = "ince_admin_session";
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "admin123";
 const MAX_CHILDREN = 3;
@@ -12,7 +12,15 @@ const MONTHLY_BONUS_REFERENCES = [
   { key: "all_country", label: "オールカントリー", monthlyRate: 1.8 },
 ];
 const SUPABASE_SNAPSHOT_TABLE = "account_snapshots";
-const SUPABASE_CONFIG = window.STUDYPAY_SUPABASE_CONFIG || {};
+const SUPABASE_CONFIG = window.INCE_SUPABASE_CONFIG || {};
+const CHILD_CLOUD_REFRESH_INTERVAL_MS = 15000;
+const PARENT_CLOUD_REFRESH_INTERVAL_MS = 15000;
+const PROFILE_PHOTO_MAX_SIZE = 320;
+const PROFILE_PHOTO_JPEG_QUALITY = 0.82;
+const APPLICATION_PHOTO_MAX_SIZE = 1280;
+const APPLICATION_PHOTO_JPEG_QUALITY = 0.82;
+const PARENT_PULL_REFRESH_THRESHOLD = 76;
+const PARENT_PULL_REFRESH_MAX_DISTANCE = 112;
 const PLAN_OPTIONS = {
   trial: { label: "無料トライアル", price: 0, period: "14日間" },
   monthly: { label: "月払い", price: 500, period: "月" },
@@ -42,6 +50,16 @@ const cloudState = {
   error: "",
 };
 let supabaseClient = null;
+let childCloudRefreshPromise = null;
+let lastChildCloudRefreshAt = 0;
+let parentCloudRefreshPromise = null;
+let lastParentCloudRefreshAt = 0;
+let cloudAutoRefreshTimer = null;
+let parentPullRefreshStartY = 0;
+let parentPullRefreshDistance = 0;
+let isParentPullRefreshTracking = false;
+let isParentPullRefreshing = false;
+let isParentPullRefreshBound = false;
 
 function loadAccount() {
   try {
@@ -94,10 +112,52 @@ function pruneExpiredPhotosIfNeeded() {
 }
 
 function saveAccount(parent) {
-  localStorage.setItem(ACCOUNT_KEY, JSON.stringify(parent));
+  const snapshot = {
+    ...parent,
+    updatedAt: new Date().toISOString(),
+  };
+  localStorage.setItem(ACCOUNT_KEY, JSON.stringify(snapshot));
   localStorage.setItem(SESSION_KEY, "true");
-  state.parent = parent;
-  syncAccountToCloud(parent);
+  state.parent = snapshot;
+  syncAccountToCloud(snapshot);
+}
+
+function getAccountUpdatedTime(parent) {
+  const timestamps = [
+    parent?.updatedAt,
+    parent?.createdAt,
+    parent?.subscription?.updatedAt,
+    ...(parent?.children || []).flatMap((child) => [
+      child.updatedAt,
+      child.createdAt,
+      child.passwordUpdatedAt,
+      child.profilePhoto?.updatedAt,
+      ...(child.applications || []).flatMap((application) => [
+        application.updatedAt,
+        application.submittedAt,
+        application.reviewedAt,
+        application.canceledAt,
+        application.deletedAt,
+      ]),
+      ...(child.redemptions || []).flatMap((redemption) => [
+        redemption.updatedAt,
+        redemption.requestedAt,
+        redemption.reviewedAt,
+      ]),
+      ...(child.notifications || []).map((notification) => notification.createdAt),
+      ...(child.pointHistory || []).map((item) => item.createdAt),
+      ...(child.pointRules || []).map((rule) => rule.updatedAt),
+      ...(child.subjects || []).map((subject) => subject.updatedAt || subject.createdAt),
+    ]),
+    ...(parent?.notifications || []).map((notification) => notification.createdAt),
+  ];
+
+  return Math.max(
+    0,
+    ...timestamps
+      .map((value) => new Date(value || 0).getTime())
+      .filter((value) => Number.isFinite(value)),
+  );
 }
 
 function canUseCloudStorage() {
@@ -123,7 +183,7 @@ async function hydrateAccountFromCloud() {
   const client = getSupabaseClient();
   const localParent = loadAccount();
   if (!client || !localParent?.email) {
-    return;
+    return false;
   }
 
   try {
@@ -140,22 +200,36 @@ async function hydrateAccountFromCloud() {
 
     const remoteParent = data?.snapshot;
     if (remoteParent?.email) {
-      const localUpdatedAt = new Date(localParent.updatedAt || localParent.createdAt || 0).getTime();
-      const remoteUpdatedAt = new Date(remoteParent.updatedAt || data.updated_at || 0).getTime();
+      const localUpdatedAt = getAccountUpdatedTime(localParent);
+      const snapshotUpdatedAt = new Date(remoteParent.updatedAt || 0).getTime();
+      const rowUpdatedAt = new Date(data.updated_at || 0).getTime();
+      const normalizedUpdatedAtValue = Math.max(snapshotUpdatedAt, rowUpdatedAt);
+      const normalizedUpdatedAt = new Date(normalizedUpdatedAtValue || Date.now()).toISOString();
+      const nextRemoteParent = {
+        ...remoteParent,
+        updatedAt: normalizedUpdatedAt,
+      };
+      const remoteUpdatedAt = new Date(nextRemoteParent.updatedAt).getTime();
       if (remoteUpdatedAt > localUpdatedAt) {
-        localStorage.setItem(ACCOUNT_KEY, JSON.stringify(remoteParent));
+        localStorage.setItem(ACCOUNT_KEY, JSON.stringify(nextRemoteParent));
         if (localStorage.getItem(SESSION_KEY) === "true") {
-          state.parent = remoteParent;
+          state.parent = nextRemoteParent;
         }
+        cloudState.status = "synced";
+        cloudState.lastSyncedAt = new Date().toISOString();
+        cloudState.error = "";
+        return true;
       }
     }
 
     cloudState.status = "synced";
     cloudState.lastSyncedAt = new Date().toISOString();
     cloudState.error = "";
+    return false;
   } catch (error) {
     cloudState.status = "error";
     cloudState.error = error.message || "Supabaseとの同期に失敗しました。";
+    return false;
   }
 }
 
@@ -315,6 +389,10 @@ function render() {
   }
 
   if (route.startsWith("/child")) {
+    if (shouldRefreshChildAccountFromCloud()) {
+      refreshChildAccountFromCloud(route);
+    }
+
     const child = getCurrentChild();
     if (!child) {
       navigate("/child/login");
@@ -335,6 +413,9 @@ function render() {
       navigate("/login");
       return;
     }
+    if (shouldRefreshParentAccountFromCloud()) {
+      refreshParentAccountFromCloud(route);
+    }
     const subscription = getSubscription(loadAccount() || state.parent);
     const canOpenBillingRoute = route === "/parent/billing" || route === "/parent/settings" || route === "/parent/demo-guide";
     if (!canUseApp(subscription.status) && !canOpenBillingRoute) {
@@ -348,6 +429,149 @@ function render() {
 
   app.innerHTML = lpView();
   bindLp();
+}
+
+function shouldRefreshChildAccountFromCloud() {
+  if (!canUseCloudStorage() || childCloudRefreshPromise) {
+    return false;
+  }
+
+  const account = loadAccount();
+  if (!account?.email) {
+    return false;
+  }
+
+  return Date.now() - lastChildCloudRefreshAt > CHILD_CLOUD_REFRESH_INTERVAL_MS;
+}
+
+function refreshChildAccountFromCloud(routeAtStart = state.route) {
+  if (childCloudRefreshPromise) {
+    return childCloudRefreshPromise;
+  }
+
+  childCloudRefreshPromise = hydrateAccountFromCloud()
+    .catch(() => false)
+    .then((accountUpdated) => {
+      lastChildCloudRefreshAt = Date.now();
+      childCloudRefreshPromise = null;
+      if (accountUpdated && state.route === routeAtStart && shouldRenderCloudUpdate("child")) {
+        render();
+      }
+      return accountUpdated;
+    });
+  return childCloudRefreshPromise;
+}
+
+function shouldRefreshParentAccountFromCloud() {
+  if (!canUseCloudStorage() || parentCloudRefreshPromise) {
+    return false;
+  }
+
+  const account = loadAccount();
+  if (!account?.email || localStorage.getItem(SESSION_KEY) !== "true") {
+    return false;
+  }
+
+  return Date.now() - lastParentCloudRefreshAt > PARENT_CLOUD_REFRESH_INTERVAL_MS;
+}
+
+function refreshParentAccountFromCloud(routeAtStart = state.route) {
+  if (parentCloudRefreshPromise) {
+    return parentCloudRefreshPromise;
+  }
+
+  parentCloudRefreshPromise = hydrateAccountFromCloud()
+    .catch(() => false)
+    .then((accountUpdated) => {
+      lastParentCloudRefreshAt = Date.now();
+      parentCloudRefreshPromise = null;
+      if (accountUpdated && state.route === routeAtStart && shouldRenderCloudUpdate("parent")) {
+        render();
+      }
+      return accountUpdated;
+    });
+  return parentCloudRefreshPromise;
+}
+
+function startCloudAutoRefresh() {
+  if (cloudAutoRefreshTimer) {
+    return;
+  }
+
+  cloudAutoRefreshTimer = window.setInterval(runCloudAutoRefresh, Math.min(CHILD_CLOUD_REFRESH_INTERVAL_MS, PARENT_CLOUD_REFRESH_INTERVAL_MS));
+}
+
+function runCloudAutoRefresh(force = false) {
+  if (document.hidden || !canUseCloudStorage()) {
+    return;
+  }
+
+  if (isCloudAutoRenderBlockedRoute(state.route)) {
+    return;
+  }
+
+  if (state.route.startsWith("/child")) {
+    if (force || shouldRefreshChildAccountFromCloud()) {
+      refreshChildAccountFromCloud(state.route);
+    }
+    return;
+  }
+
+  if (state.route.startsWith("/parent")) {
+    if (force || shouldRefreshParentAccountFromCloud()) {
+      refreshParentAccountFromCloud(state.route);
+    }
+  }
+}
+
+function shouldRenderCloudUpdate(mode) {
+  if (mode === "child") {
+    return state.route.startsWith("/child") && isCloudAutoRenderRoute(state.route);
+  }
+
+  if (mode === "parent") {
+    return state.route.startsWith("/parent") && isCloudAutoRenderRoute(state.route);
+  }
+
+  return false;
+}
+
+function isCloudAutoRenderRoute(route) {
+  if (document.querySelector(".parent-switch-modal, .child-complete-modal, #application-submitted-modal, #delete-application-confirm-modal")) {
+    return false;
+  }
+
+  if (document.activeElement?.matches?.("input, textarea, select")) {
+    return false;
+  }
+
+  return !isCloudAutoRenderBlockedRoute(route);
+}
+
+function isCloudAutoRenderBlockedRoute(route) {
+  return (
+    route === "/child/login" ||
+    route === "/child/apply" ||
+    route.startsWith("/child/apply/") ||
+    route.startsWith("/child/reapply/") ||
+    route === "/child/redeem" ||
+    route === "/parent/children/new" ||
+    route === "/parent/monthly-bonus" ||
+    route.startsWith("/parent/applications/") ||
+    route.endsWith("/subjects") ||
+    route.endsWith("/rules")
+  );
+}
+
+function childCloudLoadingView() {
+  return `
+    <section class="screen auth-screen">
+      <div class="card auth-card">
+        <h1>読み込み中</h1>
+        <p>こども情報を確認しています。</p>
+      </div>
+    </section>
+  `;
 }
 
 function renderParentRoute(app, route) {
@@ -585,9 +809,9 @@ function renderChildRoute(app, route, child) {
 function topbar() {
   return `
     <div class="topbar">
-      <div class="brand" aria-label="スタディペイ">
+      <div class="brand" aria-label="INCE">
         <span class="brand-mark">S</span>
-        <span>スタディペイ</span>
+        <span>INCE</span>
       </div>
       <button class="text-button" type="button" data-route="/login">ログイン</button>
     </div>
@@ -808,7 +1032,7 @@ function parentHomeView() {
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
-          <img class="header-logo-image parent-header-logo-image" src="./logo.png" alt="スタディペイ" />
+          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase201" alt="INCE" />
         </div>
         <div class="parent-header-switch">
           <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -825,30 +1049,32 @@ function parentHomeView() {
 
       ${subscription.status === "grace_period" ? `<div class="notice-card">支払い確認中です。猶予期間中は通常どおり利用できます。</div>` : ""}
 
-      <div class="card home-overview-card">
-        <div class="overview-head">
-          <div>
-            <span class="summary-kicker">未確認の申請</span>
-            <div class="summary-number">${pendingApplications.length}件</div>
-            <p>${primaryActionCopy}</p>
+      ${childCount > 0 ? `
+        <div class="card home-overview-card">
+          <div class="overview-head">
+            <div>
+              <span class="summary-kicker">未確認の申請</span>
+              <div class="summary-number">${pendingApplications.length}件</div>
+              <p>${primaryActionCopy}</p>
+            </div>
           </div>
+          <div class="metric-grid">
+            <div class="metric-item">
+              <span>おこづかい申請</span>
+              <strong>${pendingRedemptions.length}件</strong>
+            </div>
+            <div class="metric-item">
+              <span>今月支給</span>
+              <strong>${paidAllowanceTotal.toLocaleString()}円</strong>
+            </div>
+            <div class="metric-item">
+              <span>未読通知</span>
+              <strong>${unreadCount}件</strong>
+            </div>
+          </div>
+          <button class="primary-button compact-button" type="button" data-route="${primaryActionRoute}">${primaryActionLabel}</button>
         </div>
-        <div class="metric-grid">
-          <div class="metric-item">
-            <span>おこづかい申請</span>
-            <strong>${pendingRedemptions.length}件</strong>
-          </div>
-          <div class="metric-item">
-            <span>今月支給</span>
-            <strong>${paidAllowanceTotal.toLocaleString()}円</strong>
-          </div>
-          <div class="metric-item">
-            <span>未読通知</span>
-            <strong>${unreadCount}件</strong>
-          </div>
-        </div>
-        <button class="primary-button compact-button" type="button" data-route="${primaryActionRoute}">${primaryActionLabel}</button>
-      </div>
+      ` : ""}
 
       ${parentHomeChildrenStatus(children)}
 
@@ -2979,7 +3205,7 @@ function childHeader(label) {
   return `
     <div class="topbar child-topbar">
       <div class="brand">
-        <img class="header-logo-image child-header-logo-image" src="./logo.png" alt="スタディペイ" />
+        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase201" alt="INCE" />
       </div>
       <div class="child-profile-pill">
         <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -3144,13 +3370,59 @@ function loginAsDemoParent() {
 function bindChildLogin() {
   bindRouteButtons();
 
-  document.querySelector("#child-login-form").addEventListener("submit", (event) => {
+  document.querySelector("#child-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    if (formElement.dataset.submitting === "true") {
+      return;
+    }
+
+    const form = new FormData(formElement);
     const loginId = String(form.get("loginId") || "").trim();
     const password = String(form.get("password") || "").trim();
     const error = document.querySelector("#child-login-error");
-    const child = findChildByCredentials(loginId, password);
+    const submitButton = formElement.querySelector('button[type="submit"]');
+    const submitButtonLabel = submitButton?.textContent || "ログイン";
+    const loginIdInput = formElement.querySelector("#child-login-id-input");
+    const passwordInput = formElement.querySelector("#child-login-password-input");
+    if (loginIdInput) {
+      loginIdInput.value = loginId;
+    }
+    if (passwordInput) {
+      passwordInput.value = password;
+    }
+    error.classList.remove("is-info");
+    error.textContent = "";
+
+    if (!loginId || !password) {
+      error.textContent = "ログインIDとパスワードを入力してください。";
+      return;
+    }
+
+    let child = findChildByCredentials(loginId, password);
+
+    if (!child) {
+      formElement.dataset.submitting = "true";
+      error.classList.add("is-info");
+      error.textContent = "ログイン情報を確認しています。";
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = "確認中";
+      }
+      try {
+        child = await findChildByCredentialsFromCloud(loginId, password);
+      } finally {
+        formElement.dataset.submitting = "";
+        if (submitButton && document.body.contains(submitButton)) {
+          submitButton.disabled = false;
+          submitButton.textContent = submitButtonLabel;
+        }
+      }
+      if (!document.body.contains(formElement)) {
+        return;
+      }
+      error.classList.remove("is-info");
+    }
 
     if (!child) {
       error.textContent = "ログインIDまたはパスワードが違います。";
@@ -3552,10 +3824,19 @@ function bindChildNew() {
       return;
     }
 
-    const profilePhoto = form._profilePhotoFile ? (await readPhotoFiles([form._profilePhotoFile]))[0] : null;
-    const child = createChild({ nickname, profilePhoto, loginId, password });
-    addChild(child);
-    navigate(`/parent/children/${child.id}`);
+    try {
+      if (form._profilePhotoError) {
+        error.textContent = form._profilePhotoError;
+        return;
+      }
+
+      const profilePhoto = form._profilePhoto || null;
+      const child = createChild({ nickname, profilePhoto, loginId, password });
+      addChild(child);
+      navigate(`/parent/children/${child.id}`);
+    } catch (submitError) {
+      error.textContent = submitError.message || "こどもを追加できませんでした。写真を変更してもう一度お試しください。";
+    }
   });
 }
 
@@ -3578,6 +3859,8 @@ function bindProfilePhotoPicker(container, { onFileSelected, onReset } = {}) {
     button.addEventListener("click", () => {
       if (button.dataset.profilePhotoAction === "reset") {
         container._profilePhotoFile = null;
+        container._profilePhoto = null;
+        container._profilePhotoError = "";
         container.querySelectorAll("[data-profile-photo-input]").forEach((input) => {
           input.value = "";
         });
@@ -3601,30 +3884,38 @@ function bindProfilePhotoPicker(container, { onFileSelected, onReset } = {}) {
     input.addEventListener("change", async () => {
       const file = input.files?.[0] || null;
       container._profilePhotoFile = file;
-      updateProfilePhotoPreview(file);
-      if (file) {
-        await onFileSelected?.(file);
+      container._profilePhoto = null;
+      container._profilePhotoError = "";
+      if (!file) {
+        updateProfilePhotoPreview(null);
+        return;
+      }
+
+      try {
+        const profilePhoto = await createProfilePhotoFromFile(file);
+        container._profilePhoto = profilePhoto;
+        updateProfilePhotoPreview(profilePhoto);
+        await onFileSelected?.(profilePhoto);
+      } catch {
+        container._profilePhotoError = "写真を読み込めませんでした。別の写真を選んでください。";
+        updateProfilePhotoPreview(null);
       }
     });
   });
 }
 
-function updateProfilePhotoPreview(file) {
+function updateProfilePhotoPreview(profilePhoto) {
   const preview = document.querySelector("#profile-photo-preview");
   if (!preview) {
     return;
   }
 
-  if (!file) {
+  if (!profilePhoto?.dataUrl) {
     preview.innerHTML = studyPayIcon("circle-user-round", "profile-photo-placeholder-icon");
     return;
   }
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    preview.innerHTML = `<img src="${escapeHtml(String(reader.result || ""))}" alt="選択したプロフィール写真" />`;
-  };
-  reader.readAsDataURL(file);
+  preview.innerHTML = `<img src="${escapeHtml(profilePhoto.dataUrl)}" alt="${escapeHtml(profilePhoto.name || "選択したプロフィール写真")}" />`;
 }
 
 function bindChildDetail(child) {
@@ -3636,8 +3927,7 @@ function bindChildDetail(child) {
   const profilePhotoContainer = document.querySelector("[data-child-detail-profile]");
   if (profilePhotoContainer) {
     bindProfilePhotoPicker(profilePhotoContainer, {
-      onFileSelected: async (file) => {
-        const [profilePhoto] = await readPhotoFiles([file]);
+      onFileSelected: async (profilePhoto) => {
         updateChild(child.id, { profilePhoto });
       },
       onReset: () => {
@@ -4007,8 +4297,16 @@ function bindChildApply(child, editingApplication = null) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const error = document.querySelector("#application-error");
+    const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+    const submitButtonLabel = submitButton?.textContent || "";
     error.textContent = "";
     clearScoreError();
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = "送信中";
+    }
+
+    try {
     const category = String(form.get("category") || "test");
     const subjectId = String(form.get("subjectId") || "");
     const subject =
@@ -4093,6 +4391,7 @@ function bindChildApply(child, editingApplication = null) {
       message: `${child.nickname}さんから${categoryLabel(application.category)}の申請が届いています。`,
       route: `/parent/applications/${application.id}`,
     });
+    await syncCurrentAccountToCloud();
 
     if (editingApplication) {
       navigate("/child/history");
@@ -4100,6 +4399,17 @@ function bindChildApply(child, editingApplication = null) {
     }
 
     showApplicationSubmittedModal();
+    } catch (submitError) {
+      error.textContent =
+        submitError?.name === "QuotaExceededError"
+          ? "写真の保存容量が大きすぎます。別の写真を選ぶか、写真を1枚にしてもう一度送信してください。"
+          : submitError?.message || "送信できませんでした。写真を選び直してもう一度お試しください。";
+    } finally {
+      if (submitButton && document.body.contains(submitButton)) {
+        submitButton.disabled = false;
+        submitButton.textContent = submitButtonLabel;
+      }
+    }
   });
 
   document.querySelector("#delete-application-from-edit")?.addEventListener("click", (event) => {
@@ -4174,6 +4484,7 @@ function showDeleteApplicationConfirm(child, applicationId) {
       application.id === applicationId ? { ...application, status: "deleted", deletedAt: new Date().toISOString() } : application,
     );
     updateChildWithoutParentLogin(child.id, { applications: nextApplications });
+    syncCurrentAccountToCloud();
     closeModal();
     navigate("/child/history");
   });
@@ -4186,7 +4497,7 @@ function bindChildRedeem(child) {
     return;
   }
 
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const points = Number(formData.get("points") || 0);
@@ -4215,6 +4526,7 @@ function bindChildRedeem(child) {
       message: `${child.nickname}さんから${points.toLocaleString()}ptのおこづかい申請が届いています。`,
       route: `/parent/redemptions/${redemption.id}`,
     });
+    await syncCurrentAccountToCloud();
     state.flash = `${points.toLocaleString()}ptのおこづかい申請を送りました。`;
     render();
   });
@@ -4227,7 +4539,7 @@ function bindChildHistory(child) {
     button.addEventListener("click", () => {
       state.childHistoryFilter = button.dataset.childHistoryFilter || "all";
       render();
-      window.dispatchEvent(new CustomEvent("studypay:child-rendered"));
+      window.dispatchEvent(new CustomEvent("ince:child-rendered"));
     });
   });
 
@@ -4240,6 +4552,7 @@ function bindChildHistory(child) {
           : application,
       );
       updateChildWithoutParentLogin(child.id, { applications: nextApplications });
+      syncCurrentAccountToCloud();
       render();
     });
   });
@@ -4253,6 +4566,7 @@ function bindChildHistory(child) {
           : application,
       );
       updateChildWithoutParentLogin(child.id, { applications: nextApplications });
+      syncCurrentAccountToCloud();
       render();
     });
   });
@@ -4384,10 +4698,189 @@ function showParentSwitchPasswordModal() {
 
 function bindParentShell() {
   bindRouteButtons();
+  ensureParentPullRefreshIndicator();
+  bindParentPullToRefresh();
   document.querySelector("#logout-button")?.addEventListener("click", () => {
     clearSession();
     navigate("/");
   });
+}
+
+function ensureParentPullRefreshIndicator() {
+  const screen = document.querySelector(".screen.home-screen");
+  if (!screen || !state.route.startsWith("/parent") || screen.querySelector("[data-parent-pull-refresh]")) {
+    return;
+  }
+
+  const indicator = document.createElement("div");
+  indicator.className = "parent-pull-refresh";
+  indicator.dataset.parentPullRefresh = "";
+  indicator.setAttribute("aria-hidden", "true");
+  indicator.innerHTML = `
+    <span class="parent-pull-refresh-icon" aria-hidden="true">${studyPayIcon("refresh-cw", "parent-pull-refresh-svg")}</span>
+    <strong data-parent-pull-refresh-label>下に引っ張って更新</strong>
+  `;
+
+  const header = screen.querySelector(".topbar");
+  if (header) {
+    header.insertAdjacentElement("afterend", indicator);
+    return;
+  }
+
+  screen.prepend(indicator);
+}
+
+function bindParentPullToRefresh() {
+  if (isParentPullRefreshBound) {
+    return;
+  }
+
+  isParentPullRefreshBound = true;
+
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      const screen = event.target.closest?.(".screen.home-screen");
+      if (!screen || !state.route.startsWith("/parent") || isParentPullRefreshing) {
+        return;
+      }
+
+      if (screen.scrollTop > 0 || event.touches.length !== 1) {
+        return;
+      }
+
+      parentPullRefreshStartY = event.touches[0].clientY;
+      parentPullRefreshDistance = 0;
+      isParentPullRefreshTracking = true;
+    },
+    { passive: true },
+  );
+
+  document.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!isParentPullRefreshTracking || isParentPullRefreshing || event.touches.length !== 1) {
+        return;
+      }
+
+      const screen = getActiveParentPullRefreshScreen();
+      if (!screen || screen.scrollTop > 0) {
+        resetParentPullRefresh(screen);
+        return;
+      }
+
+      const distance = Math.max(0, event.touches[0].clientY - parentPullRefreshStartY);
+      if (distance <= 0) {
+        return;
+      }
+
+      event.preventDefault();
+      parentPullRefreshDistance = Math.min(PARENT_PULL_REFRESH_MAX_DISTANCE, distance * 0.55);
+      updateParentPullRefreshIndicator(screen, parentPullRefreshDistance);
+    },
+    { passive: false },
+  );
+
+  document.addEventListener(
+    "touchend",
+    () => {
+      if (!isParentPullRefreshTracking) {
+        return;
+      }
+
+      const screen = getActiveParentPullRefreshScreen();
+      isParentPullRefreshTracking = false;
+      if (!screen || parentPullRefreshDistance < PARENT_PULL_REFRESH_THRESHOLD) {
+        resetParentPullRefresh(screen);
+        return;
+      }
+
+      runParentPullRefresh(screen);
+    },
+    { passive: true },
+  );
+
+  document.addEventListener(
+    "touchcancel",
+    () => {
+      isParentPullRefreshTracking = false;
+      resetParentPullRefresh(getActiveParentPullRefreshScreen());
+    },
+    { passive: true },
+  );
+}
+
+function getActiveParentPullRefreshScreen() {
+  if (!state.route.startsWith("/parent")) {
+    return null;
+  }
+
+  return document.querySelector(".screen.home-screen");
+}
+
+function updateParentPullRefreshIndicator(screen, distance) {
+  if (!screen) {
+    return;
+  }
+
+  const indicator = screen.querySelector("[data-parent-pull-refresh]");
+  const label = indicator?.querySelector("[data-parent-pull-refresh-label]");
+  const ready = distance >= PARENT_PULL_REFRESH_THRESHOLD;
+  screen.classList.add("is-parent-pulling-refresh");
+  screen.classList.toggle("is-parent-pull-refresh-ready", ready);
+  if (indicator) {
+    indicator.style.height = `${Math.round(distance)}px`;
+  }
+  if (label) {
+    label.textContent = ready ? "離して更新" : "下に引っ張って更新";
+  }
+}
+
+function resetParentPullRefresh(screen) {
+  parentPullRefreshDistance = 0;
+  if (!screen) {
+    return;
+  }
+
+  screen.classList.remove("is-parent-pulling-refresh", "is-parent-pull-refresh-ready", "is-parent-refreshing");
+  const indicator = screen.querySelector("[data-parent-pull-refresh]");
+  if (indicator) {
+    indicator.style.removeProperty("height");
+  }
+  const label = screen.querySelector("[data-parent-pull-refresh-label]");
+  if (label) {
+    label.textContent = "下に引っ張って更新";
+  }
+}
+
+function runParentPullRefresh(screen) {
+  if (!screen || isParentPullRefreshing) {
+    return;
+  }
+
+  isParentPullRefreshing = true;
+  screen.classList.add("is-parent-pulling-refresh", "is-parent-refreshing");
+  screen.classList.remove("is-parent-pull-refresh-ready");
+  const indicator = screen.querySelector("[data-parent-pull-refresh]");
+  if (indicator) {
+    indicator.style.height = "72px";
+  }
+  const label = screen.querySelector("[data-parent-pull-refresh-label]");
+  if (label) {
+    label.textContent = "更新中";
+  }
+
+  const routeAtStart = state.route;
+  Promise.resolve(hydrateAccountFromCloud())
+    .then((accountUpdated) => {
+      if (accountUpdated && state.route === routeAtStart && state.route.startsWith("/parent")) {
+        render();
+      }
+    })
+    .finally(() => {
+      isParentPullRefreshing = false;
+      resetParentPullRefresh(getActiveParentPullRefreshScreen());
+    });
 }
 
 function bindAdminShell() {
@@ -4452,6 +4945,61 @@ function findChildByCredentials(loginId, password) {
   return getAllChildren().find(
     (child) => child.loginId === loginId && child.demoPassword === password,
   );
+}
+
+async function findChildByCredentialsFromCloud(loginId, password) {
+  const client = getSupabaseClient();
+  if (!client || !loginId || !password) {
+    return null;
+  }
+
+  try {
+    cloudState.status = "syncing";
+    const { data, error } = await client
+      .from(SUPABASE_SNAPSHOT_TABLE)
+      .select("snapshot, updated_at");
+
+    if (error) {
+      throw error;
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+    for (const row of rows) {
+      const parent = row?.snapshot;
+      const child = (parent?.children || []).find(
+        (item) =>
+          item.status !== "deleted" &&
+          item.loginId === loginId &&
+          item.demoPassword === password,
+      );
+
+      if (!child) {
+        continue;
+      }
+
+      const nextParent = {
+        ...parent,
+        updatedAt: parent.updatedAt || row.updated_at || new Date().toISOString(),
+      };
+      localStorage.setItem(ACCOUNT_KEY, JSON.stringify(nextParent));
+      if (localStorage.getItem(SESSION_KEY) === "true") {
+        state.parent = nextParent;
+      }
+      cloudState.status = "synced";
+      cloudState.lastSyncedAt = new Date().toISOString();
+      cloudState.error = "";
+      return child;
+    }
+
+    cloudState.status = "synced";
+    cloudState.lastSyncedAt = new Date().toISOString();
+    cloudState.error = "";
+    return null;
+  } catch (error) {
+    cloudState.status = "error";
+    cloudState.error = error.message || "こどもログイン情報の確認に失敗しました。";
+    return null;
+  }
 }
 
 function findChild(childId) {
@@ -4846,10 +5394,12 @@ function cancelMonthlyBonus(bonusId) {
 
 function updateChildWithoutParentLogin(childId, updates) {
   const parent = loadAccount();
+  const updatedAt = new Date().toISOString();
   const nextParent = {
     ...parent,
+    updatedAt,
     children: (parent.children || []).map((child) =>
-      child.id === childId ? { ...child, ...updates } : child,
+      child.id === childId ? { ...child, ...updates, updatedAt } : child,
     ),
   };
   localStorage.setItem(ACCOUNT_KEY, JSON.stringify(nextParent));
@@ -4867,12 +5417,22 @@ function appendParentNotification(input) {
   const notification = createNotification(input);
   const nextParent = {
     ...parent,
+    updatedAt: new Date().toISOString(),
     notifications: [notification, ...(parent.notifications || [])],
   };
   localStorage.setItem(ACCOUNT_KEY, JSON.stringify(nextParent));
   if (state.parent) {
     state.parent = nextParent;
   }
+}
+
+async function syncCurrentAccountToCloud() {
+  const parent = loadAccount();
+  if (!parent?.email) {
+    return;
+  }
+
+  await syncAccountToCloud(parent);
 }
 
 function markParentNotificationsRead() {
@@ -4921,7 +5481,7 @@ function markChildNotificationsRead(childId) {
 function exportPrototypeData() {
   const data = {
     exportedAt: new Date().toISOString(),
-    app: "studypay-prototype",
+    app: "ince-prototype",
     version: "phase11",
     localStorage: {
       [ACCOUNT_KEY]: localStorage.getItem(ACCOUNT_KEY),
@@ -4934,7 +5494,7 @@ function exportPrototypeData() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `studypay-prototype-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `ince-prototype-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -5421,23 +5981,93 @@ function createApplication(child, values) {
   };
 }
 
-function readPhotoFiles(fileList) {
-  return Promise.all(
-    Array.from(fileList).map(
-      (file) =>
-        new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () =>
-            resolve({
-              name: file.name,
-              dataUrl: String(reader.result || ""),
-            });
-          reader.onerror = () => reject(reader.error);
-          reader.readAsDataURL(file);
-        }),
-    ),
-  );
+function createProfilePhotoFromFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file?.type?.startsWith("image/")) {
+      reject(new Error("画像ファイルを選択してください。"));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error("写真を読み込めませんでした。"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("写真を読み込めませんでした。"));
+      image.onload = () => {
+        const scale = Math.min(
+          1,
+          PROFILE_PHOTO_MAX_SIZE / image.width,
+          PROFILE_PHOTO_MAX_SIZE / image.height,
+        );
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("写真を処理できませんでした。"));
+          return;
+        }
+
+        context.drawImage(image, 0, 0, width, height);
+        resolve({
+          name: file.name,
+          dataUrl: canvas.toDataURL("image/jpeg", PROFILE_PHOTO_JPEG_QUALITY),
+        });
+      };
+      image.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
 }
+
+function readPhotoFiles(fileList) {
+  return Promise.all(Array.from(fileList).map(createApplicationPhotoFromFile));
+}
+
+function createApplicationPhotoFromFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file?.type?.startsWith("image/")) {
+      reject(new Error("画像ファイルを選択してください。"));
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error("写真を読み込めませんでした。"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("写真を読み込めませんでした。別の写真を選んでください。"));
+      image.onload = () => {
+        const scale = Math.min(
+          1,
+          APPLICATION_PHOTO_MAX_SIZE / image.width,
+          APPLICATION_PHOTO_MAX_SIZE / image.height,
+        );
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          reject(new Error("写真を処理できませんでした。"));
+          return;
+        }
+
+        context.drawImage(image, 0, 0, width, height);
+        resolve({
+          name: file.name,
+          dataUrl: canvas.toDataURL("image/jpeg", APPLICATION_PHOTO_JPEG_QUALITY),
+        });
+      };
+      image.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+window.studyPayCreateApplicationPhotoFromFile = createApplicationPhotoFromFile;
 
 function showPhotoModal(src, name) {
   if (!src) {
@@ -6016,8 +6646,8 @@ function applicationPointLabel(application) {
 }
 
 function studyPayIcon(name, className = "") {
-  if (window.StudyPayIcons?.icon) {
-    return window.StudyPayIcons.icon(name, className);
+  if (window.INCEIcons?.icon) {
+    return window.INCEIcons.icon(name, className);
   }
 
   const fallbackIcons = {
@@ -6080,6 +6710,12 @@ function studyPayIcon(name, className = "") {
       <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/>
       <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>
     `,
+    "refresh-cw": `
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+      <path d="M21 3v5h-5"/>
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+      <path d="M8 16H3v5"/>
+    `,
     settings: `
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
       <circle cx="12" cy="12" r="3"/>
@@ -6141,10 +6777,13 @@ function ruleLabel(ruleType) {
   return labels[ruleType] || ruleType;
 }
 
-window.studypayForceNavigate = function studypayForceNavigate(path) {
+window.inceForceNavigate = function inceForceNavigate(path) {
   state.route = path;
   location.hash = path;
   render();
 };
 
-hydrateAccountFromCloud().finally(render);
+hydrateAccountFromCloud().finally(() => {
+  render();
+  startCloudAutoRefresh();
+});

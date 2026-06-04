@@ -7,17 +7,17 @@
 以下をそのまま別チャットの最初に貼ってください。
 
 ```md
-スタディペイのUI/デザイン改善をお願いします。
+INCEのUI/デザイン改善をお願いします。
 
 前提:
-- プロジェクト: /Users/kaz/Documents/スタディペイ
-- 公開URL: https://studypay-eight.vercel.app/
-- GitHub: https://github.com/kazu0702/studypay
-- メインアプリ: /Users/kaz/Documents/スタディペイ/app/app.js
-- スタイル: /Users/kaz/Documents/スタディペイ/app/styles.css
-- 追加機能: /Users/kaz/Documents/スタディペイ/app/monthly-bonus.js
-- 要件定義: /Users/kaz/Documents/スタディペイ/docs/要件定義.md
-- 引き継ぎ資料: /Users/kaz/Documents/スタディペイ/docs/開発引き継ぎ資料.md
+- プロジェクト: /Users/kaz/Documents/INCE
+- 公開URL: https://ince-eight.vercel.app/
+- GitHub: https://github.com/kazu0702/ince
+- メインアプリ: /Users/kaz/Documents/INCE/app/app.js
+- スタイル: /Users/kaz/Documents/INCE/app/styles.css
+- 追加機能: /Users/kaz/Documents/INCE/app/monthly-bonus.js
+- 要件定義: /Users/kaz/Documents/INCE/docs/要件定義.md
+- 引き継ぎ資料: /Users/kaz/Documents/INCE/docs/開発引き継ぎ資料.md
 
 現在の状態:
 - 親子の申請・承認・ポイント付与・おこづかい申請のMVPは動いている
@@ -169,9 +169,9 @@
 
 公開URL:
 
-- https://studypay-eight.vercel.app/?reload=monthly-bonus#/parent
-- https://studypay-eight.vercel.app/?reload=monthly-bonus#/parent/monthly-bonus
-- https://studypay-eight.vercel.app/?reload=monthly-bonus#/child
+- https://ince-eight.vercel.app/?reload=monthly-bonus#/parent
+- https://ince-eight.vercel.app/?reload=monthly-bonus#/parent/monthly-bonus
+- https://ince-eight.vercel.app/?reload=monthly-bonus#/child
 
 デモログイン:
 
