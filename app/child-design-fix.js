@@ -407,7 +407,7 @@
     screen.innerHTML = `
       <header class="child-design-topbar">
         <div class="child-design-logo" aria-label="INCE">
-          <img class="child-design-logo-image" src="./logo.svg?v=phase202" alt="INCE" />
+          <img class="child-design-logo-image" src="./logo.svg?v=phase205" alt="INCE" />
         </div>
         <div class="child-design-profile-wrap">
           <button class="child-design-profile" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeText(child.nickname || "タロー")}">
@@ -2152,7 +2152,7 @@
         margin: 0 -20px 0;
         border-bottom: 1px solid #f1e5dc;
         background: #fff;
-        padding: 12px 20px;
+        padding: calc(env(safe-area-inset-top, 0px) + 12px) 20px 12px;
       }
 
       .child-apply-hero > div {

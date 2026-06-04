@@ -12,6 +12,9 @@
   --red: #c94f3d;
   --blue: #346273;
   --shadow: 0 4px 20px rgba(255, 128, 0, 0.08);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --header-safe-top: calc(var(--safe-top) + 10px);
 }
 
 * {
@@ -21,7 +24,7 @@
 html,
 body {
   min-height: 100%;
-  background: #fff;
+  background: var(--bg);
 }
 
 body {
@@ -50,6 +53,7 @@ button {
 .phone-shell {
   width: min(100%, 440px);
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   background: var(--bg);
   box-shadow: 0 0 0 1px rgba(54, 37, 22, 0.05);
@@ -68,11 +72,13 @@ button {
 
 .app {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
 }
 
 .screen {
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 18px 18px 96px;
 }
 
@@ -86,6 +92,7 @@ button {
   justify-content: space-between;
   gap: 12px;
   min-height: 44px;
+  padding-top: var(--safe-top);
 }
 
 .brand {
@@ -110,28 +117,33 @@ button {
 }
 
 .parent-home-topbar {
+  position: sticky;
+  top: -18px;
+  z-index: 30;
   min-height: 52px;
   margin: -18px -18px 0;
   border-bottom: 1px solid rgba(217, 222, 210, 0.72);
-  padding: max(30px, calc(env(safe-area-inset-top) + 16px)) 18px 10px;
+  padding: var(--header-safe-top) 18px 10px;
   background: #fff;
 }
 
 .parent-settings-topbar {
-  position: relative;
+  position: sticky;
+  top: -18px;
+  z-index: 30;
   min-height: 52px;
   margin: -18px -18px 0;
   border-bottom: 1px solid rgba(217, 222, 210, 0.72);
-  padding: max(30px, calc(env(safe-area-inset-top) + 16px)) 18px 10px;
+  padding: var(--header-safe-top) 18px 10px;
   background: #fff;
 }
 
 .parent-settings-topbar h1 {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: calc(var(--safe-top) + 26px);
   margin: 0;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   color: var(--text);
   font-size: 17px;
   font-weight: 900;
@@ -142,12 +154,11 @@ button {
 .settings-header-back {
   position: absolute;
   left: 10px;
-  top: 50%;
+  top: calc(var(--safe-top) + 6px);
   display: grid;
   width: 40px;
   height: 40px;
   place-items: center;
-  transform: translateY(-50%);
   border: 0;
   background: transparent;
   color: var(--text);
@@ -1824,11 +1835,11 @@ button {
 
 .child-topbar {
   position: sticky;
-  top: 0;
+  top: -18px;
   z-index: 8;
   margin: -18px -20px 20px;
   min-height: 64px;
-  padding: 10px 18px;
+  padding: var(--header-safe-top) 18px 10px;
   border-bottom: 1px solid rgba(240, 216, 200, 0.72);
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(12px);
