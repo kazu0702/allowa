@@ -15,6 +15,9 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --header-safe-top: calc(var(--safe-top) + 10px);
+  --fixed-shell-top: 0px;
+  --fixed-header-height: calc(var(--safe-top) + 59px);
+  --fixed-header-space: calc(var(--fixed-header-height) + 18px);
 }
 
 * {
@@ -117,22 +120,28 @@ button {
 }
 
 .parent-home-topbar {
-  position: sticky;
-  top: -18px;
+  position: fixed;
+  top: var(--fixed-shell-top);
+  left: 50%;
   z-index: 30;
+  width: min(100%, 440px);
   min-height: 52px;
-  margin: -18px -18px 0;
+  margin: 0;
+  transform: translateX(-50%);
   border-bottom: 1px solid rgba(217, 222, 210, 0.72);
   padding: var(--header-safe-top) 18px 10px;
   background: #fff;
 }
 
 .parent-settings-topbar {
-  position: sticky;
-  top: -18px;
+  position: fixed;
+  top: var(--fixed-shell-top);
+  left: 50%;
   z-index: 30;
+  width: min(100%, 440px);
   min-height: 52px;
-  margin: -18px -18px 0;
+  margin: 0;
+  transform: translateX(-50%);
   border-bottom: 1px solid rgba(217, 222, 210, 0.72);
   padding: var(--header-safe-top) 18px 10px;
   background: #fff;
@@ -614,6 +623,12 @@ button {
   overflow-y: auto;
   padding-bottom: 108px;
   -webkit-overflow-scrolling: touch;
+}
+
+.home-screen:has(> .parent-home-topbar),
+.home-screen:has(> .parent-settings-topbar),
+.home-screen.child-theme:has(> .child-topbar) {
+  padding-top: var(--fixed-header-space);
 }
 
 .parent-pull-refresh {
@@ -1834,10 +1849,13 @@ button {
 }
 
 .child-topbar {
-  position: sticky;
-  top: -18px;
-  z-index: 8;
-  margin: -18px -20px 20px;
+  position: fixed;
+  top: var(--fixed-shell-top);
+  left: 50%;
+  z-index: 30;
+  width: min(100%, 440px);
+  margin: 0;
+  transform: translateX(-50%);
   min-height: 64px;
   padding: var(--header-safe-top) 18px 10px;
   border-bottom: 1px solid rgba(240, 216, 200, 0.72);
@@ -3149,6 +3167,10 @@ button {
 }
 
 @media (min-width: 720px) {
+  :root {
+    --fixed-shell-top: 24px;
+  }
+
   body {
     padding: 24px 0;
   }

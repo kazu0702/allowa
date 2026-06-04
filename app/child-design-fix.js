@@ -407,7 +407,7 @@
     screen.innerHTML = `
       <header class="child-design-topbar">
         <div class="child-design-logo" aria-label="INCE">
-          <img class="child-design-logo-image" src="./logo.svg?v=phase205" alt="INCE" />
+          <img class="child-design-logo-image" src="./logo.svg?v=phase206" alt="INCE" />
         </div>
         <div class="child-design-profile-wrap">
           <button class="child-design-profile" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeText(child.nickname || "タロー")}">
@@ -1377,20 +1377,23 @@
 
       .child-design-home {
         min-height: 100dvh;
-        padding: 0 20px 118px;
+        padding: calc(72px + env(safe-area-inset-top, 0px) + 26px) 20px 118px;
         background: linear-gradient(180deg, #fff 0, #fff calc(72px + env(safe-area-inset-top)), #fff8f1 calc(72px + env(safe-area-inset-top)), #fffaf6 100%);
         color: #16120e;
       }
 
       .child-design-topbar {
-        position: sticky;
+        position: fixed;
         top: 0;
+        left: 50%;
         z-index: 40;
+        width: min(100%, 440px);
         display: flex;
         align-items: center;
         justify-content: space-between;
         height: calc(72px + env(safe-area-inset-top));
-        margin: 0 -20px 26px;
+        margin: 0;
+        transform: translateX(-50%);
         border-bottom: 1px solid #f1e5dc;
         background: #fff;
         padding: env(safe-area-inset-top) 22px 0;
