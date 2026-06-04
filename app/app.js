@@ -220,6 +220,12 @@ async function hydrateAccountFromCloud() {
         cloudState.error = "";
         return true;
       }
+
+      if (localUpdatedAt > remoteUpdatedAt) {
+        await syncAccountToCloud(localParent);
+      }
+    } else {
+      await syncAccountToCloud(localParent);
     }
 
     cloudState.status = "synced";
@@ -1032,7 +1038,7 @@ function parentHomeView() {
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
-          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase206" alt="INCE" />
+          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase207" alt="INCE" />
         </div>
         <div class="parent-header-switch">
           <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -3205,7 +3211,7 @@ function childHeader(label) {
   return `
     <div class="topbar child-topbar">
       <div class="brand">
-        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase206" alt="INCE" />
+        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase207" alt="INCE" />
       </div>
       <div class="child-profile-pill">
         <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">

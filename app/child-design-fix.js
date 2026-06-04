@@ -407,7 +407,7 @@
     screen.innerHTML = `
       <header class="child-design-topbar">
         <div class="child-design-logo" aria-label="INCE">
-          <img class="child-design-logo-image" src="./logo.svg?v=phase206" alt="INCE" />
+          <img class="child-design-logo-image" src="./logo.svg?v=phase207" alt="INCE" />
         </div>
         <div class="child-design-profile-wrap">
           <button class="child-design-profile" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeText(child.nickname || "タロー")}">
