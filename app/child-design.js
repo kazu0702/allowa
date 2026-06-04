@@ -230,7 +230,7 @@
     return `
       <div class="topbar child-topbar">
         <div class="brand">
-          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase207" alt="INCE" />
+          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase215" alt="INCE" />
         </div>
         <div class="child-profile-pill">
           ${typeof childAvatar === "function" ? childAvatar(child, "child-account-avatar") : ""}
@@ -669,12 +669,12 @@
       .header-logo-image {
         display: block;
         width: auto;
-        height: 44px;
+        height: 28px;
         object-fit: contain;
       }
 
       .child-header-logo-image {
-        height: 42px;
+        height: 28px;
       }
 
       .child-profile-pill {

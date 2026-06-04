@@ -11,6 +11,7 @@
   let isPullRefreshing = false;
 
   ensureStyles();
+  installHistoryBottomNav();
   scheduleUpgrade();
   watchAppRender();
   bindDelegatedActions();
@@ -20,6 +21,22 @@
 
   window.addEventListener("hashchange", scheduleUpgrade);
   window.addEventListener("ince:child-rendered", scheduleUpgrade);
+
+  function installHistoryBottomNav() {
+    if (typeof childBottomNav !== "function" || childBottomNav._usesChildDesignNav) {
+      return;
+    }
+
+    const baseChildBottomNav = childBottomNav;
+    childBottomNav = function childBottomNavWithHistoryDesign(active) {
+      if (active === "history") {
+        return bottomNav("history");
+      }
+
+      return baseChildBottomNav(active);
+    };
+    childBottomNav._usesChildDesignNav = true;
+  }
 
   function bindDelegatedActions() {
     document.addEventListener("click", (event) => {
@@ -407,7 +424,7 @@
     screen.innerHTML = `
       <header class="child-design-topbar">
         <div class="child-design-logo" aria-label="INCE">
-          <img class="child-design-logo-image" src="./logo.svg?v=phase207" alt="INCE" />
+          <img class="child-design-logo-image" src="./logo.svg?v=phase215" alt="INCE" />
         </div>
         <div class="child-design-profile-wrap">
           <button class="child-design-profile" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeText(child.nickname || "タロー")}">
@@ -597,6 +614,18 @@
 
     scoreField.classList.add("child-score-field");
     const select = scoreField.querySelector("#test-full-score");
+    const syncFullScoreVisibility = () => {
+      if (getRoute() !== "/child/apply") {
+        return;
+      }
+
+      const isEnabled = isPointRuleEnabledForCurrentSubject("test_50");
+      scoreField.classList.toggle("hidden", !isEnabled);
+      select.disabled = !isEnabled;
+      if (!isEnabled) {
+        select.value = "100";
+      }
+    };
     const options = [
       ["100", "100点満点"],
       ["50", "50点満点"],
@@ -613,10 +642,15 @@
       )
       .join("");
     scoreField.appendChild(optionWrap);
+    syncFullScoreVisibility();
+    form.querySelector("#application-subject")?.addEventListener("change", syncFullScoreVisibility);
 
     optionWrap.addEventListener("click", (event) => {
       const button = event.target.closest("[data-score-value]");
       if (!button) {
+        return;
+      }
+      if (select.disabled) {
         return;
       }
 
@@ -626,6 +660,15 @@
         item.classList.toggle("active", item === button);
       });
     });
+  }
+
+  function isPointRuleEnabledForCurrentSubject(ruleType) {
+    const child = getCurrentChildData();
+    const subjectId = document.querySelector("#application-subject")?.value || "";
+    const rule =
+      (child?.pointRules || []).find((item) => item.subjectId === subjectId && item.ruleType === ruleType) ||
+      (child?.pointRules || []).find((item) => !item.subjectId && item.ruleType === ruleType);
+    return rule?.enabled !== false;
   }
 
   function decoratePhotoField(form) {
@@ -1183,6 +1226,9 @@
   function setBalanceCardBackground(child, dataUrl) {
     const key = getBalanceCardBackgroundKey(child);
     getBalanceCardBackgroundStore()[key] = dataUrl;
+    if (typeof updateChildWithoutParentLogin === "function" && child?.id) {
+      updateChildWithoutParentLogin(child.id, { balanceCardBackground: dataUrl });
+    }
     try {
       window.localStorage?.setItem(key, dataUrl);
     } catch (error) {
@@ -1198,6 +1244,9 @@
 
     const key = getBalanceCardBackgroundKey(child);
     delete getBalanceCardBackgroundStore()[key];
+    if (typeof updateChildWithoutParentLogin === "function" && child?.id) {
+      updateChildWithoutParentLogin(child.id, { balanceCardBackground: "" });
+    }
     try {
       window.localStorage?.removeItem(key);
     } catch (error) {
@@ -1497,7 +1546,7 @@
       .child-design-logo-image {
         display: block;
         width: auto;
-        height: 48px;
+        height: 28px;
         object-fit: contain;
       }
 
@@ -2266,6 +2315,10 @@
         pointer-events: none;
       }
 
+      .child-score-field.hidden {
+        display: none;
+      }
+
       .child-category-options {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2619,9 +2672,9 @@
       }
 
       .child-delete-modal-confirm {
-        border: 1px solid rgba(199, 55, 47, 0.24);
-        background: #fff5f4;
-        color: #c7372f;
+        border: 1px solid #c7372f;
+        background: #c7372f;
+        color: #fff;
       }
 
       .child-delete-modal-cancel {
