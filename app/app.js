@@ -8,8 +8,8 @@ const MAX_CHILDREN = 3;
 const DEFAULT_SUBJECTS = ["国語", "算数", "英語"];
 const REDEMPTION_UNITS = [100, 1000, 10000];
 const MONTHLY_BONUS_REFERENCES = [
-  { key: "sp500", label: "S&P500", monthlyRate: 2.4 },
-  { key: "all_country", label: "オールカントリー", monthlyRate: 1.8 },
+  { key: "monthly_cheer", label: "今月の応援ボーナス", suggestionPercent: 5 },
+  { key: "habit_cheer", label: "習慣づくりボーナス", suggestionPercent: 10 },
 ];
 const SUPABASE_SNAPSHOT_TABLE = "account_snapshots";
 const SUPABASE_CONFIG = window.INCE_SUPABASE_CONFIG || {};
@@ -1032,7 +1032,7 @@ function parentHomeView() {
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
-          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase201" alt="INCE" />
+          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase202" alt="INCE" />
         </div>
         <div class="parent-header-switch">
           <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -1943,7 +1943,7 @@ function parentMonthlyBonusView() {
                 <span class="status-pill home-pill">任意</span>
                 <h2>参考ボーナス候補</h2>
               </div>
-              <p class="card-copy">外部の参考値をもとにした候補です。家庭内ルールとして使うか、最終的なポイント数はいずれも保護者が決めます。</p>
+              <p class="card-copy">家庭内ルールの候補です。使うかどうかと最終的なポイント数は、いずれも保護者が決めます。</p>
               <input type="hidden" name="childId" value="${escapeHtml(selectedChild?.id || "")}" />
               <div class="monthly-form-grid">
                 <div class="field">
@@ -2005,13 +2005,13 @@ function parentMonthlyBonusView() {
 }
 
 function monthlyBonusReferenceCard(reference, basePoints) {
-  const suggestedPoints = Math.round(Number(basePoints || 0) * (reference.monthlyRate / 100));
+  const suggestedPoints = Math.round(Number(basePoints || 0) * (reference.suggestionPercent / 100));
   return `
     <div class="card application-card monthly-reference-card">
       <div>
         <span class="status-pill pending">参考候補</span>
         <h2>${escapeHtml(reference.label)}</h2>
-        <p>参考の変化 ${reference.monthlyRate > 0 ? "+" : ""}${reference.monthlyRate}% をもとにした候補</p>
+        <p>基準ポイントの ${reference.suggestionPercent}% を目安にした候補</p>
       </div>
       <div class="application-meta monthly-suggestion">
         <span>追加ポイント候補</span>
@@ -3205,7 +3205,7 @@ function childHeader(label) {
   return `
     <div class="topbar child-topbar">
       <div class="brand">
-        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase201" alt="INCE" />
+        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase202" alt="INCE" />
       </div>
       <div class="child-profile-pill">
         <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -3529,7 +3529,7 @@ function bindParentMonthlyBonus() {
       const formData = new FormData(form);
       const reference = MONTHLY_BONUS_REFERENCES.find((item) => item.key === button.dataset.referenceKey);
       const basePoints = Number(formData.get("basePoints") || 0);
-      const suggestedPoints = Math.round(basePoints * ((reference?.monthlyRate || 0) / 100));
+      const suggestedPoints = Math.round(basePoints * ((reference?.suggestionPercent || 0) / 100));
       const points = Number(formData.get(`referencePoints-${reference?.key}`) || suggestedPoints);
       const childId = String(formData.get("childId") || "");
       const targetMonth = String(formData.get("targetMonth") || getCurrentMonthValue());
@@ -3544,13 +3544,13 @@ function bindParentMonthlyBonus() {
         childId,
         targetMonth,
         source: reference.key,
-        name: `${reference.label} 参考ボーナス`,
+        name: `${reference.label}`,
         points,
-        referenceRate: reference.monthlyRate,
+        referenceRate: reference.suggestionPercent,
         referencePoints: suggestedPoints,
-        note: `${reference.label} の参考値を見て保護者が付与`,
+        note: `${reference.label}を家庭内ルールとして保護者が付与`,
       });
-      state.flash = `${reference.label} 参考ボーナスを付与しました。`;
+      state.flash = `${reference.label}を付与しました。`;
       render();
     });
   });
@@ -3563,7 +3563,7 @@ function bindParentMonthlyBonus() {
       const childId = String(formData.get("childId") || "");
       const targetMonth = String(formData.get("targetMonth") || getCurrentMonthValue());
       const basePoints = Number(formData.get("basePoints") || 0);
-      const referencePoints = Math.round(basePoints * ((reference?.monthlyRate || 0) / 100));
+      const referencePoints = Math.round(basePoints * ((reference?.suggestionPercent || 0) / 100));
 
       if (!reference || !childId) {
         state.flash = "対象を確認してください。";
@@ -3575,12 +3575,12 @@ function bindParentMonthlyBonus() {
         childId,
         targetMonth,
         source: reference.key,
-        name: `${reference.label} 参考ボーナス`,
-        referenceRate: reference.monthlyRate,
+        name: `${reference.label}`,
+        referenceRate: reference.suggestionPercent,
         referencePoints,
-        note: `${reference.label} の参考値を見て、今月は付与しない判断`,
+        note: `${reference.label}を確認し、今月は付与しない判断`,
       });
-      state.flash = `${reference.label} 参考ボーナスを付与なしにしました。`;
+      state.flash = `${reference.label}を付与なしにしました。`;
       render();
     });
   });
@@ -6503,8 +6503,8 @@ function pointTransactionLabel(type) {
 
 function monthlyBonusSourceLabel(source) {
   const labels = {
-    sp500: "S&P500 参考値",
-    all_country: "オールカントリー参考値",
+    sp500: "今月の応援ボーナス",
+    all_country: "習慣づくりボーナス",
     custom: "親独自ボーナス",
   };
   return labels[source] || "月次ボーナス";

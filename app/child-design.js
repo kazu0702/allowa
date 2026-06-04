@@ -230,7 +230,7 @@
     return `
       <div class="topbar child-topbar">
         <div class="brand">
-          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase201" alt="INCE" />
+          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase202" alt="INCE" />
         </div>
         <div class="child-profile-pill">
           ${typeof childAvatar === "function" ? childAvatar(child, "child-account-avatar") : ""}

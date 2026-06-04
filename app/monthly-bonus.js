@@ -8,8 +8,8 @@
   }
 
   const references = [
-    { key: "sp500", label: "S&P500", monthlyRate: 2.4 },
-    { key: "all_country", label: "オールカントリー", monthlyRate: 1.8 },
+    { key: "monthly_cheer", label: "今月の応援ボーナス", suggestionPercent: 5 },
+    { key: "habit_cheer", label: "習慣づくりボーナス", suggestionPercent: 10 },
   ];
 
   ensureMonthlyBonusStyles();
@@ -387,7 +387,7 @@
                   <span class="status-pill home-pill">任意</span>
                   <h2>参考ボーナス候補</h2>
                 </div>
-                <p class="card-copy">外部の参考値をもとにした候補です。家庭内ルールとして使うか、最終的なポイント数はいずれも保護者が決めます。</p>
+                <p class="card-copy">家庭内ルールの候補です。使うかどうかと最終的なポイント数は、いずれも保護者が決めます。</p>
                 <input type="hidden" name="childId" value="${escapeHtml(selectedChild?.id || "")}" />
                 <div class="monthly-form-grid">
                   <div class="field">
@@ -449,13 +449,13 @@
   }
 
   function monthlyBonusReferenceCard(reference, basePoints) {
-    const suggestedPoints = Math.round(Number(basePoints || 0) * (reference.monthlyRate / 100));
+    const suggestedPoints = Math.round(Number(basePoints || 0) * (reference.suggestionPercent / 100));
     return `
       <div class="card application-card monthly-reference-card">
         <div>
           <span class="status-pill pending">参考候補</span>
           <h2>${escapeHtml(reference.label)}</h2>
-          <p>参考の変化 ${reference.monthlyRate > 0 ? "+" : ""}${reference.monthlyRate}% をもとにした候補</p>
+          <p>基準ポイントの ${reference.suggestionPercent}% を目安にした候補</p>
         </div>
         <div class="application-meta monthly-suggestion">
           <span>追加ポイント候補</span>
@@ -514,7 +514,7 @@
         const formData = new FormData(document.querySelector("#monthly-bonus-reference-form"));
         const reference = references.find((item) => item.key === button.dataset.referenceKey);
         const basePoints = Number(formData.get("basePoints") || 0);
-        const suggestedPoints = Math.round(basePoints * ((reference?.monthlyRate || 0) / 100));
+        const suggestedPoints = Math.round(basePoints * ((reference?.suggestionPercent || 0) / 100));
         const points = Number(formData.get(`referencePoints-${reference?.key}`) || suggestedPoints);
 
         if (!reference || points <= 0) {
@@ -527,13 +527,13 @@
           childId: String(formData.get("childId") || ""),
           targetMonth: String(formData.get("targetMonth") || getCurrentMonthValue()),
           source: reference.key,
-          name: `${reference.label} 参考ボーナス`,
+          name: `${reference.label}`,
           points,
-          referenceRate: reference.monthlyRate,
+          referenceRate: reference.suggestionPercent,
           referencePoints: suggestedPoints,
-          note: `${reference.label} の参考値を見て保護者が付与`,
+          note: `${reference.label}を家庭内ルールとして保護者が付与`,
         });
-        state.flash = `${reference.label} 参考ボーナスを付与しました。`;
+        state.flash = `${reference.label}を付与しました。`;
         render();
       });
     });
@@ -543,18 +543,18 @@
         const formData = new FormData(document.querySelector("#monthly-bonus-reference-form"));
         const reference = references.find((item) => item.key === button.dataset.referenceKey);
         const basePoints = Number(formData.get("basePoints") || 0);
-        const referencePoints = Math.round(basePoints * ((reference?.monthlyRate || 0) / 100));
+        const referencePoints = Math.round(basePoints * ((reference?.suggestionPercent || 0) / 100));
 
         skipMonthlyBonus({
           childId: String(formData.get("childId") || ""),
           targetMonth: String(formData.get("targetMonth") || getCurrentMonthValue()),
           source: reference.key,
-          name: `${reference.label} 参考ボーナス`,
-          referenceRate: reference.monthlyRate,
+          name: `${reference.label}`,
+          referenceRate: reference.suggestionPercent,
           referencePoints,
-          note: `${reference.label} の参考値を見て、今月は付与しない判断`,
+          note: `${reference.label}を確認し、今月は付与しない判断`,
         });
-        state.flash = `${reference.label} 参考ボーナスを付与なしにしました。`;
+        state.flash = `${reference.label}を付与なしにしました。`;
         render();
       });
     });
@@ -779,8 +779,8 @@
 
   function monthlyBonusSourceLabel(source) {
     return {
-      sp500: "S&P500 参考値",
-      all_country: "オールカントリー参考値",
+      sp500: "今月の応援ボーナス",
+      all_country: "習慣づくりボーナス",
       custom: "親独自ボーナス",
     }[source] || "月次ボーナス";
   }
