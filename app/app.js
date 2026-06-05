@@ -865,7 +865,7 @@ function topbar() {
   return `
     <div class="topbar">
       <div class="brand" aria-label="allowa">
-        <img class="header-logo-image lp-header-logo-image" src="./logo.svg?v=phase286" alt="allowa" />
+        <img class="header-logo-image lp-header-logo-image" src="./logo.svg?v=phase291" alt="allowa" />
       </div>
       <button class="text-button" type="button" data-route="/login">ログイン</button>
     </div>
@@ -878,7 +878,9 @@ function lpView() {
       ${topbar()}
 
       <div class="hero">
-        <h1>がんばった成績を、おこづかいに。</h1>
+        <h1>がんばった証をおこづかいに</h1>
+      </div>
+      <div class="hero-copy">
         <p>テストや学習成果をこどもが自分で申請し、保護者が確認してポイント付与。がんばりが数字で増えるから、次も挑戦したくなります。</p>
         <div class="hero-actions">
           <button class="primary-button" type="button" data-route="/signup">14日間無料で始める</button>
@@ -1086,7 +1088,7 @@ function parentHomeView() {
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
-          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase286" alt="allowa" />
+          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase291" alt="allowa" />
         </div>
         <div class="parent-header-switch">
           <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -3473,7 +3475,7 @@ function childHeader(label) {
   return `
     <div class="topbar child-topbar">
       <div class="brand">
-        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase286" alt="allowa" />
+        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase291" alt="allowa" />
       </div>
       <div class="child-profile-pill">
         <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">

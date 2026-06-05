@@ -18,6 +18,7 @@
   --fixed-shell-top: 0px;
   --fixed-header-height: calc(var(--safe-top) + 59px);
   --fixed-header-space: calc(var(--fixed-header-height) + 18px);
+  --lp-header-height: calc(var(--safe-top) + 74px);
 }
 
 * {
@@ -86,7 +87,19 @@ button {
 }
 
 .lp-screen {
+  padding-top: 0;
   padding-bottom: 42px;
+}
+
+.lp-screen > .topbar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 40;
+  width: min(100%, 440px);
+  padding: calc(var(--safe-top) + 18px) 18px 12px;
+  transform: translateX(-50%);
+  background: #fff;
 }
 
 .topbar {
@@ -295,19 +308,38 @@ button {
 
 .hero {
   position: relative;
-  padding: 28px 0 18px;
+  display: grid;
+  min-height: 310px;
+  align-content: end;
+  margin: var(--lp-header-height) -18px 0;
+  padding: 0 18px 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 248, 241, 0.02) 0%, rgba(255, 248, 241, 0.08) 58%, rgba(255, 248, 241, 0.38) 100%),
+    url("./image.jpg") center top / 100% auto no-repeat;
 }
 
 .hero h1 {
-  margin: 18px 0 12px;
-  font-size: 36px;
-  line-height: 1.12;
+  width: fit-content;
+  max-width: min(100%, 380px);
+  margin: 0 0 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 24px;
+  line-height: 1.28;
   letter-spacing: 0;
 }
 
-.hero p {
+.hero-copy {
+  margin: 0 -18px;
+  padding: 18px 18px 26px;
+  background: linear-gradient(180deg, #fff8f1 0%, rgba(255, 248, 241, 0.82) 100%);
+}
+
+.hero-copy p {
   margin: 0;
-  color: var(--muted);
+  color: #4f4035;
   font-size: 16px;
   line-height: 1.75;
 }

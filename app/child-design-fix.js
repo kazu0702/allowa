@@ -435,7 +435,7 @@
     screen.innerHTML = `
       <header class="child-design-topbar">
         <div class="child-design-logo" aria-label="allowa">
-          <img class="child-design-logo-image" src="./logo.svg?v=phase286" alt="allowa" />
+          <img class="child-design-logo-image" src="./logo.svg?v=phase291" alt="allowa" />
         </div>
         <div class="child-design-profile-wrap">
           <button class="child-design-profile" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeText(child.nickname || "タロー")}">

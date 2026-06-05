@@ -20,6 +20,7 @@ await Promise.all([
   copyFile(join(root, "app", "manifest.webmanifest"), join(dist, "manifest.webmanifest")),
   copyFile(join(root, "app", "icon.svg"), join(dist, "icon.svg")),
   copyFile(join(root, "app", "logo.svg"), join(dist, "logo.svg")),
+  copyFile(join(root, "app", "image.jpg"), join(dist, "image.jpg")),
 ]);
 
 async function loadLocalEnv() {
