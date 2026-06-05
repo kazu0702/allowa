@@ -865,8 +865,7 @@ function topbar() {
   return `
     <div class="topbar">
       <div class="brand" aria-label="allowa">
-        <span class="brand-mark">a</span>
-        <span>allowa</span>
+        <img class="header-logo-image lp-header-logo-image" src="./logo.svg?v=phase286" alt="allowa" />
       </div>
       <button class="text-button" type="button" data-route="/login">ログイン</button>
     </div>
@@ -1087,7 +1086,7 @@ function parentHomeView() {
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
-          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase285" alt="allowa" />
+          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase286" alt="allowa" />
         </div>
         <div class="parent-header-switch">
           <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -3474,7 +3473,7 @@ function childHeader(label) {
   return `
     <div class="topbar child-topbar">
       <div class="brand">
-        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase285" alt="allowa" />
+        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase286" alt="allowa" />
       </div>
       <div class="child-profile-pill">
         <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">
