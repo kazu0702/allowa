@@ -2,6 +2,7 @@ const ACCOUNT_KEY = "ince_parent_account";
 const SESSION_KEY = "ince_parent_session";
 const CHILD_SESSION_KEY = "ince_child_session";
 const ADMIN_SESSION_KEY = "ince_admin_session";
+const LAST_APP_MODE_KEY = "ince_last_app_mode";
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "admin123";
 const MAX_CHILDREN = 3;
@@ -287,11 +288,17 @@ async function syncAccountToCloud(parent) {
 
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
+  if (localStorage.getItem(LAST_APP_MODE_KEY) === "parent") {
+    localStorage.removeItem(LAST_APP_MODE_KEY);
+  }
   state.parent = null;
 }
 
 function clearChildSession() {
   localStorage.removeItem(CHILD_SESSION_KEY);
+  if (localStorage.getItem(LAST_APP_MODE_KEY) === "child") {
+    localStorage.removeItem(LAST_APP_MODE_KEY);
+  }
 }
 
 function getChildSession() {
@@ -328,6 +335,7 @@ function setChildSession(child) {
       passwordUpdatedAt: child.passwordUpdatedAt || null,
     }),
   );
+  setLastAppMode("child");
 }
 
 function isChildSessionValid(child, session) {
@@ -341,6 +349,54 @@ function isChildSessionValid(child, session) {
   }
 
   return session.passwordUpdatedAt === passwordUpdatedAt;
+}
+
+function setLastAppMode(mode) {
+  if (mode === "parent" || mode === "child") {
+    localStorage.setItem(LAST_APP_MODE_KEY, mode);
+  }
+}
+
+function rememberAppModeFromRoute(path) {
+  if (path.startsWith("/parent") && path !== "/parent/login") {
+    setLastAppMode("parent");
+    return;
+  }
+
+  if (path.startsWith("/child") && path !== "/child/login") {
+    setLastAppMode("child");
+  }
+}
+
+function getParentStartupRoute(parent) {
+  const subscription = getSubscription(parent);
+  return canUseApp(subscription.status) ? "/parent" : "/parent/billing";
+}
+
+function getStartupRouteFromSession() {
+  const parent = loadSessionParent();
+  const child = getCurrentChild();
+  const lastMode = localStorage.getItem(LAST_APP_MODE_KEY);
+
+  if (lastMode === "child" && child) {
+    return "/child";
+  }
+
+  if (lastMode === "parent" && parent) {
+    state.parent = parent;
+    return getParentStartupRoute(parent);
+  }
+
+  if (parent) {
+    state.parent = parent;
+    return getParentStartupRoute(parent);
+  }
+
+  if (child) {
+    return "/child";
+  }
+
+  return "";
 }
 
 function navigate(path) {
@@ -365,6 +421,7 @@ function navigate(path) {
     }
   }
 
+  rememberAppModeFromRoute(path);
   location.hash = path;
 }
 
@@ -418,6 +475,14 @@ function render() {
   const app = document.querySelector("#app");
   const route = state.route;
   document.querySelector(".phone-shell")?.classList.toggle("admin-shell", route.startsWith("/admin"));
+
+  if (route === "/") {
+    const startupRoute = getStartupRouteFromSession();
+    if (startupRoute) {
+      navigate(startupRoute);
+      return;
+    }
+  }
 
   if (route === "/admin/login") {
     app.innerHTML = adminLoginView();
@@ -478,6 +543,7 @@ function render() {
       bindChildShell();
       return;
     }
+    setLastAppMode("child");
     renderChildRoute(app, route, child);
     return;
   }
@@ -497,6 +563,7 @@ function render() {
       bindParentShell();
       return;
     }
+    setLastAppMode("parent");
     renderParentRoute(app, route);
     return;
   }
