@@ -4819,6 +4819,27 @@ button {
   font-size: 20px;
 }
 
+.admin-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.admin-panel-header h2 {
+  margin-bottom: 6px;
+}
+
+.admin-panel-header p,
+.admin-supabase-status,
+.admin-subtext {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .admin-table {
   width: 100%;
   min-width: 720px;
@@ -4841,6 +4862,54 @@ button {
 
 .admin-table td {
   font-size: 14px;
+}
+
+.admin-subtext {
+  display: block;
+  margin-top: 4px;
+}
+
+.admin-supabase-status {
+  margin-bottom: 12px;
+}
+
+.admin-supabase-table {
+  min-width: 980px;
+}
+
+.admin-snapshot-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-snapshot-summary span {
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--primary-dark);
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-json-details summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.admin-json-details pre {
+  width: min(72vw, 760px);
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid #e4e7ee;
+  border-radius: 8px;
+  background: #111827;
+  color: #f9fafb;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .empty-state {

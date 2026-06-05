@@ -874,6 +874,12 @@ function renderAdminRoute(app, route) {
     return;
   }
 
+  if (route === "/admin/supabase") {
+    app.innerHTML = adminSupabaseView();
+    bindAdminSupabase();
+    return;
+  }
+
   app.innerHTML = adminDashboardView();
   bindAdminShell();
 }
@@ -1837,6 +1843,7 @@ function adminShell(title, content) {
           <button type="button" data-route="/admin/parents">保護者</button>
           <button type="button" data-route="/admin/children">こども</button>
           <button type="button" data-route="/admin/applications">申請</button>
+          <button type="button" data-route="/admin/supabase">Supabase</button>
         </nav>
       </aside>
       <main class="admin-main">
@@ -1954,12 +1961,85 @@ function adminApplicationsView() {
   );
 }
 
+function adminSupabaseView() {
+  return adminShell(
+    "Supabaseデータ",
+    `
+      <div class="admin-panel">
+        <div class="admin-panel-header">
+          <div>
+            <h2>account_snapshots</h2>
+            <p>Supabaseに保存されているアカウントスナップショットを確認します。</p>
+          </div>
+          <button class="primary-button small-action" type="button" id="admin-supabase-refresh">再読み込み</button>
+        </div>
+        <div class="admin-supabase-status" id="admin-supabase-status">読み込み中...</div>
+        <div id="admin-supabase-content"></div>
+      </div>
+    `,
+  );
+}
+
 function adminStat(label, value) {
   return `
     <div class="card admin-stat">
       <span>${label}</span>
       <strong>${value}</strong>
     </div>
+  `;
+}
+
+function adminSupabaseTable(rows) {
+  if (!rows.length) {
+    return `<div class="notice-card">Supabaseにデータはまだありません。</div>`;
+  }
+
+  return `
+    <table class="admin-table admin-supabase-table">
+      <thead>
+        <tr><th>メール</th><th>更新日時</th><th>概要</th><th>snapshot</th></tr>
+      </thead>
+      <tbody>
+        ${rows.map((row) => adminSupabaseRow(row)).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function adminSupabaseRow(row) {
+  const snapshot = row.snapshot || {};
+  const children = Array.isArray(snapshot.children) ? snapshot.children : [];
+  const applicationsCount = children.reduce(
+    (total, child) => total + (Array.isArray(child.applications) ? child.applications.length : 0),
+    0,
+  );
+  const redemptionsCount = children.reduce(
+    (total, child) => total + (Array.isArray(child.redemptions) ? child.redemptions.length : 0),
+    0,
+  );
+  const snapshotJson = JSON.stringify(snapshot, null, 2);
+
+  return `
+    <tr>
+      <td>
+        <strong>${escapeHtml(row.email || snapshot.email || "-")}</strong>
+        <span class="admin-subtext">${escapeHtml(snapshot.nickname || "名前未設定")}</span>
+      </td>
+      <td>${formatDateTime(row.updated_at || snapshot.updatedAt)}</td>
+      <td>
+        <div class="admin-snapshot-summary">
+          <span>こども ${children.length}人</span>
+          <span>申請 ${applicationsCount}件</span>
+          <span>おこづかい申請 ${redemptionsCount}件</span>
+        </div>
+      </td>
+      <td>
+        <details class="admin-json-details">
+          <summary>中身を見る</summary>
+          <pre>${escapeHtml(snapshotJson)}</pre>
+        </details>
+      </td>
+    </tr>
   `;
 }
 
@@ -7254,6 +7334,62 @@ function bindAdminShell() {
     localStorage.removeItem(ADMIN_SESSION_KEY);
     navigate("/admin/login");
   });
+}
+
+function bindAdminSupabase() {
+  bindAdminShell();
+  const refreshButton = document.querySelector("#admin-supabase-refresh");
+  refreshButton?.addEventListener("click", loadAdminSupabaseSnapshots);
+  loadAdminSupabaseSnapshots();
+}
+
+async function loadAdminSupabaseSnapshots() {
+  const status = document.querySelector("#admin-supabase-status");
+  const content = document.querySelector("#admin-supabase-content");
+  const refreshButton = document.querySelector("#admin-supabase-refresh");
+  if (!status || !content) {
+    return;
+  }
+
+  if (!canUseCloudStorage()) {
+    status.textContent = "Supabase設定が読み込まれていません。";
+    content.innerHTML = `<div class="notice-card">config.js のURLとpublishable keyを確認してください。</div>`;
+    return;
+  }
+
+  const client = getSupabaseClient();
+  status.textContent = "読み込み中...";
+  content.innerHTML = "";
+  if (refreshButton) {
+    refreshButton.disabled = true;
+  }
+
+  try {
+    const { data, error } = await client
+      .from(SUPABASE_SNAPSHOT_TABLE)
+      .select("email, snapshot, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      throw error;
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+    status.textContent = `${rows.length}件を表示しています。`;
+    content.innerHTML = adminSupabaseTable(rows);
+  } catch (error) {
+    status.textContent = "読み込みに失敗しました。";
+    content.innerHTML = `
+      <div class="notice-card">
+        ${escapeHtml(error.message || "Supabaseデータを取得できませんでした。")}
+      </div>
+    `;
+  } finally {
+    if (refreshButton) {
+      refreshButton.disabled = false;
+    }
+  }
 }
 
 function bindRouteButtons() {
