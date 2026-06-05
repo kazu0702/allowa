@@ -40,6 +40,10 @@
 
   function bindDelegatedActions() {
     document.addEventListener("click", (event) => {
+      if (!event.target.closest(".child-apply-dropdown")) {
+        closeApplyDropdowns();
+      }
+
       const parentSwitchButton = event.target.closest("#child-parent-switch-trigger");
       if (parentSwitchButton) {
         if (typeof toggleChildParentSwitchMenu === "function") {
@@ -80,6 +84,13 @@
       if (route && location.hash !== `#${route}`) {
         goToRoute(route);
       }
+    });
+  }
+
+  function closeApplyDropdowns() {
+    document.querySelectorAll(".child-apply-dropdown-menu").forEach((menu) => {
+      menu.hidden = true;
+      menu.closest(".child-apply-dropdown")?.querySelector(".child-apply-dropdown-trigger")?.setAttribute("aria-expanded", "false");
     });
   }
 
@@ -423,8 +434,8 @@
     screen.className = "screen home-screen child-theme child-design-home";
     screen.innerHTML = `
       <header class="child-design-topbar">
-        <div class="child-design-logo" aria-label="INCE">
-          <img class="child-design-logo-image" src="./logo.svg?v=phase215" alt="INCE" />
+        <div class="child-design-logo" aria-label="allowa">
+          <img class="child-design-logo-image" src="./logo.svg?v=phase285" alt="allowa" />
         </div>
         <div class="child-design-profile-wrap">
           <button class="child-design-profile" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeText(child.nickname || "タロー")}">
@@ -523,6 +534,8 @@
     form.querySelector(".child-form-intro")?.remove();
     decorateCategoryField(form);
     decorateFullScoreField(form);
+    decorateApplyDropdowns(form);
+    window.setTimeout(() => decorateApplyDropdowns(form), 0);
     decoratePhotoField(form);
     decorateSubmitArea(form);
 
@@ -658,6 +671,90 @@
       select.dispatchEvent(new Event("change", { bubbles: true }));
       optionWrap.querySelectorAll(".child-category-option").forEach((item) => {
         item.classList.toggle("active", item === button);
+      });
+    });
+  }
+
+  function decorateApplyDropdowns(form) {
+    bindApplyDropdownRefresh(form);
+    decorateApplySelect(form, "#application-subject");
+    decorateApplySelect(form, "#grade-evaluation-id");
+  }
+
+  function bindApplyDropdownRefresh(form) {
+    ["#application-category", "#application-subject"].forEach((selector) => {
+      const select = form.querySelector(selector);
+      if (!select || select.dataset.childApplyDropdownRefreshBound === "true") {
+        return;
+      }
+
+      select.dataset.childApplyDropdownRefreshBound = "true";
+      select.addEventListener("change", () => {
+        window.setTimeout(() => decorateApplyDropdowns(form), 0);
+      });
+    });
+  }
+
+  function decorateApplySelect(form, selector) {
+    const select = form.querySelector(selector);
+    const field = select?.closest(".field");
+    if (!select || !field) {
+      return;
+    }
+
+    field.classList.add("child-apply-dropdown-field");
+    field.querySelector(".child-apply-dropdown")?.remove();
+
+    const options = Array.from(select.options);
+    const selectedOption = options.find((option) => option.value === select.value) || options[0];
+    const dropdown = document.createElement("div");
+    dropdown.className = "child-apply-dropdown";
+    dropdown.innerHTML = `
+      <button class="child-apply-dropdown-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
+        <span>${escapeText(selectedOption?.textContent?.trim() || "")}</span>
+        ${lucideIcon("chevron-down", "child-apply-dropdown-icon")}
+      </button>
+      <div class="child-apply-dropdown-menu" role="menu" hidden>
+        ${options.map((option) => `
+          <button class="child-apply-dropdown-option ${option.value === select.value ? "active" : ""}" type="button" role="menuitem" data-select-value="${escapeText(option.value)}">
+            ${escapeText(option.textContent.trim())}
+          </button>
+        `).join("")}
+      </div>
+    `;
+    select.insertAdjacentElement("afterend", dropdown);
+
+    const trigger = dropdown.querySelector(".child-apply-dropdown-trigger");
+    const menu = dropdown.querySelector(".child-apply-dropdown-menu");
+    const closeMenu = () => {
+      menu.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+    };
+
+    trigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const isOpen = !menu.hidden;
+      document.querySelectorAll(".child-apply-dropdown-menu").forEach((item) => {
+        if (item !== menu) {
+          item.hidden = true;
+          item.closest(".child-apply-dropdown")?.querySelector(".child-apply-dropdown-trigger")?.setAttribute("aria-expanded", "false");
+        }
+      });
+      menu.hidden = isOpen;
+      trigger.setAttribute("aria-expanded", String(!isOpen));
+    });
+
+    menu.querySelectorAll("[data-select-value]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        select.value = button.dataset.selectValue || "";
+        trigger.querySelector("span").textContent = button.textContent.trim();
+        menu.querySelectorAll(".child-apply-dropdown-option").forEach((item) => {
+          item.classList.toggle("active", item === button);
+        });
+        closeMenu();
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        window.setTimeout(() => decorateApplyDropdowns(form), 0);
       });
     });
   }
@@ -915,7 +1012,7 @@
     topbar.querySelector(".brand-mark")?.classList.add("child-brand-mark");
     const brandLabel = topbar.querySelector(".brand span:last-child");
     if (brandLabel) {
-      brandLabel.textContent = "INCE";
+      brandLabel.textContent = "allowa";
     }
   }
 
@@ -2186,7 +2283,7 @@
         line-height: 1;
       }
 
-      .child-apply-design {
+      .home-screen.child-theme.child-apply-design {
         min-height: 100dvh;
         padding: 0 20px 32px;
         background: #fffaf6;
@@ -2306,13 +2403,89 @@
       }
 
       .child-category-field > select,
-      .child-score-field > select {
+      .child-score-field > select,
+      .child-apply-dropdown-field > select {
         position: absolute;
         width: 1px;
         height: 1px;
         overflow: hidden;
         opacity: 0;
         pointer-events: none;
+      }
+
+      .child-apply-dropdown {
+        position: relative;
+      }
+
+      .child-apply-dropdown-trigger {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 24px;
+        align-items: center;
+        width: 100%;
+        min-height: 58px;
+        border: 1px solid #f0dfcf;
+        border-radius: 18px;
+        background: #fffaf5;
+        color: #1d1712;
+        padding: 0 14px 0 16px;
+        text-align: left;
+        font-size: 16px;
+        font-weight: 900;
+        letter-spacing: 0;
+      }
+
+      .child-apply-dropdown-trigger span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .child-apply-dropdown-icon {
+        justify-self: end;
+        width: 22px;
+        height: 22px;
+        color: #8d837a;
+        stroke-width: 2.4;
+      }
+
+      .child-apply-dropdown-menu {
+        position: absolute;
+        z-index: 36;
+        top: calc(100% + 8px);
+        left: 0;
+        right: 0;
+        display: grid;
+        overflow: hidden;
+        border: 1px solid #f0dfcf;
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: 0 18px 38px rgba(92, 62, 29, 0.15);
+      }
+
+      .child-apply-dropdown-menu[hidden] {
+        display: none;
+      }
+
+      .child-apply-dropdown-option {
+        display: grid;
+        min-height: 58px;
+        align-items: center;
+        border: 0;
+        border-bottom: 1px solid rgba(240, 223, 207, 0.8);
+        background: #fff;
+        color: #1d1712;
+        padding: 0 18px;
+        text-align: left;
+        font-size: 15px;
+        font-weight: 850;
+      }
+
+      .child-apply-dropdown-option:last-child {
+        border-bottom: 0;
+      }
+
+      .child-apply-dropdown-option.active {
+        color: #ff8200;
       }
 
       .child-score-field.hidden {
@@ -2728,14 +2901,20 @@
       .child-apply-card .error {
         color: #c7372f;
         font-weight: 900;
+        text-align: center;
       }
 
       .child-apply-card .field-error {
-        min-height: 18px;
+        display: none;
         color: #c7372f;
         font-size: 12px;
         font-weight: 900;
         line-height: 1.5;
+      }
+
+      .child-apply-card .field-error:not(:empty) {
+        display: block;
+        min-height: 18px;
       }
 
       .child-apply-card input.input-error {

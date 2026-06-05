@@ -1,7 +1,7 @@
 {
-  "name": "INCE",
-  "short_name": "INCE",
-  "description": "INCE（インセ）は、親子で学習成果を申請・承認し、おこづかい管理につなげるスマホ向けアプリです。",
+  "name": "allowa",
+  "short_name": "allowa",
+  "description": "allowaは、親子で学習成果を申請・承認し、おこづかい管理につなげるスマホ向けアプリです。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -9,7 +9,7 @@
   "theme_color": "#ffffff",
   "icons": [
     {
-      "src": "./icon.svg?v=phase215",
+      "src": "./icon.svg?v=phase285",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

@@ -2123,6 +2123,20 @@ button {
   font-weight: 600;
 }
 
+.rule-card-block {
+  display: grid;
+  gap: 8px;
+}
+
+.rule-table-label {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.25;
+  padding: 0 2px;
+  text-align: left;
+}
+
 .rule-table-head,
 .rule-table-row {
   display: grid;
@@ -2140,12 +2154,37 @@ button {
   grid-template-columns: minmax(88px, 1fr) minmax(88px, 1fr);
 }
 
-.rank-rule-table .rule-table-head,
-.rank-rule-table .rule-table-row {
-  grid-template-columns: minmax(76px, 0.9fr) minmax(86px, 1fr) minmax(86px, 1fr);
+.grade-rule-table .rule-table-head,
+.grade-rule-table .rule-table-row input {
+  text-align: center;
 }
 
-.rank-rule-score-condition,
+.grade-rule-table .rule-table-head {
+  padding-right: 40px;
+}
+
+.grade-rule-table .rule-table-row {
+  position: relative;
+  padding-right: 40px;
+}
+
+.grade-rule-table [data-delete-grade-rule-row] {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+.grade-rule-table + .rule-add-row-button {
+  margin-right: 40px;
+}
+
+.rank-rule-table .rule-table-head,
+.rank-rule-table .rule-table-row {
+  grid-template-columns: minmax(54px, 0.7fr) minmax(70px, 0.86fr) minmax(76px, 0.9fr) 40px;
+}
+
+.rank-rule-rank,
 .rank-rule-condition {
   justify-content: center;
   text-align: center;
@@ -2256,6 +2295,13 @@ button {
   line-height: 1;
 }
 
+.fixed-rule-unit {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .fixed-rule-score-value {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -2318,6 +2364,30 @@ button {
   width: 18px;
   height: 18px;
   stroke-width: 2.4;
+}
+
+.rule-apply-subjects-button {
+  justify-self: stretch;
+  min-height: 48px;
+  margin-top: -2px;
+}
+
+.rule-save-button {
+  justify-self: stretch;
+  min-height: 48px;
+}
+
+.apply-rule-subject-field {
+  width: 100%;
+  margin: 14px 0 6px;
+  text-align: left;
+}
+
+.apply-rule-subject-menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+  max-height: 230px;
+  overflow-y: auto;
 }
 
 .rule-reset-button {
@@ -2608,6 +2678,10 @@ button {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.55;
+}
+
+.point-rule-saved-modal-panel {
+  text-align: center;
 }
 
 .parent-switch-form {

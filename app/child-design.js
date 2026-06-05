@@ -230,7 +230,7 @@
     return `
       <div class="topbar child-topbar">
         <div class="brand">
-          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase215" alt="INCE" />
+          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase285" alt="allowa" />
         </div>
         <div class="child-profile-pill">
           ${typeof childAvatar === "function" ? childAvatar(child, "child-account-avatar") : ""}
@@ -444,7 +444,7 @@
 
     const brandLabel = topbar.querySelector(".brand span:last-child");
     if (brandLabel) {
-      brandLabel.textContent = "INCE";
+      brandLabel.textContent = "allowa";
     }
   }
 

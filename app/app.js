@@ -19,6 +19,8 @@ const PROFILE_PHOTO_MAX_SIZE = 320;
 const PROFILE_PHOTO_JPEG_QUALITY = 0.82;
 const APPLICATION_PHOTO_MAX_SIZE = 1280;
 const APPLICATION_PHOTO_JPEG_QUALITY = 0.82;
+const MAX_RANK_RULE_ROWS = 10;
+const MAX_GRADE_RULE_ROWS = 10;
 const PARENT_PULL_REFRESH_THRESHOLD = 76;
 const PARENT_PULL_REFRESH_MAX_DISTANCE = 112;
 const PLAN_OPTIONS = {
@@ -862,9 +864,9 @@ function renderChildRoute(app, route, child) {
 function topbar() {
   return `
     <div class="topbar">
-      <div class="brand" aria-label="INCE">
-        <span class="brand-mark">S</span>
-        <span>INCE</span>
+      <div class="brand" aria-label="allowa">
+        <span class="brand-mark">a</span>
+        <span>allowa</span>
       </div>
       <button class="text-button" type="button" data-route="/login">ログイン</button>
     </div>
@@ -1085,7 +1087,7 @@ function parentHomeView() {
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
-          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase215" alt="INCE" />
+          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase285" alt="allowa" />
         </div>
         <div class="parent-header-switch">
           <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -2349,7 +2351,7 @@ function childDetailView(child) {
 
       ${parentChildBalanceCard(child)}
 
-      <button class="secondary-button compact-button child-detail-rule-button" type="button" data-route="/parent/children/${child.id}/rules">ポイント付与ルールを編集</button>
+      <button class="secondary-button compact-button child-detail-rule-button" type="button" data-route="/parent/children/${child.id}/rules">ポイント基準を編集</button>
 
       <div class="child-delete-action-area">
         <button class="danger-button compact-button" type="button" id="delete-child-button">こどもアカウントを削除</button>
@@ -2494,13 +2496,13 @@ function pointRulesView(child) {
   const subjects = getActiveSubjects(child);
   const selectedSubject = getSelectedRuleSubject(child, subjects);
   const selectedMode = ["test", "grade", "other"].includes(child.ruleEditorMode) ? child.ruleEditorMode : "test";
-  const selectedGradeType = child.ruleEditorGradeType || "grade_5";
+  const selectedGradeType = "grade_5";
   const selectedTestMethod = ["score", "rank"].includes(child.ruleEditorTestMethod) ? child.ruleEditorTestMethod : "score";
   const flashMessage = state.flash;
   state.flash = "";
   return `
     <section class="screen home-screen">
-      ${parentPlainHeader("ポイント付与ルール", `/parent/children/${child.id}`, "こども詳細に戻る")}
+      ${parentPlainHeader("ポイント基準", `/parent/children/${child.id}`, "こども詳細に戻る")}
       ${parentRuleFilterRow(selectedMode)}
 
       <div class="notice-card rule-notice">
@@ -2545,7 +2547,7 @@ function pointRulesView(child) {
             selectedMode === "test"
               ? `
                 <div class="field rule-test-method-field">
-                  <span class="field-label">方式</span>
+                  <span class="field-label">基準</span>
                   ${parentRuleTestMethodRow(selectedTestMethod)}
                 </div>
               `
@@ -2572,9 +2574,9 @@ function pointRulesView(child) {
 
 function parentRuleTestMethodRow(activeMethod) {
   return `
-    <div class="rule-test-method-row" aria-label="テストの設定方式">
-      ${parentRuleTestMethodButton("score", "点数式", activeMethod)}
-      ${parentRuleTestMethodButton("rank", "順位式", activeMethod)}
+    <div class="rule-test-method-row" aria-label="テストの基準">
+      ${parentRuleTestMethodButton("score", "点数基準", activeMethod)}
+      ${parentRuleTestMethodButton("rank", "順位基準", activeMethod)}
     </div>
   `;
 }
@@ -2590,7 +2592,7 @@ function parentRuleTestMethodButton(value, label, activeMethod) {
 
 function parentRuleFilterRow(activeFilter) {
   return `
-    <div class="parent-rule-filter-row parent-application-filter-row" aria-label="ポイント付与ルール種別">
+    <div class="parent-rule-filter-row parent-application-filter-row" aria-label="ポイント基準種別">
       ${parentRuleFilterButton("test", "テスト", activeFilter)}
       ${parentRuleFilterButton("grade", "成績", activeFilter)}
       ${parentRuleFilterButton("other", "その他", activeFilter)}
@@ -2636,31 +2638,70 @@ function rankRulesPanel(child, subject) {
   const rule = normalizeRankRule(getEffectivePointRule(child, subject.id, "test_rank"));
   return `
     <div class="rule-list">
-      <form class="card rule-card point-rule-form rank-rule-form" data-subject-id="${subject.id}" data-rule-type="test_rank" data-rule-category="rank">
-        <div class="test-rule-card-heading rank-rule-card-heading">
-          <span class="rule-heading-spacer" aria-hidden="true"></span>
-          <span class="summary-kicker test-rule-card-title">順位式</span>
-          <span class="rule-heading-spacer" aria-hidden="true"></span>
+      <div class="rule-card-block">
+        <form class="card rule-card point-rule-form rank-rule-form" data-subject-id="${subject.id}" data-rule-type="test_rank" data-rule-category="rank">
+          <div class="test-rule-card-heading rank-rule-card-heading">
+            <span class="rule-heading-spacer" aria-hidden="true"></span>
+            <span class="summary-kicker test-rule-card-title">順位基準</span>
+            <button class="rule-reset-button" type="button" data-reset-test-rule>デフォルトに戻す</button>
+          </div>
+          <div class="rule-table-editor rank-rule-table">
+            <div class="rule-table-head"><span>順位</span><span>条件</span><span>ポイント</span><span></span></div>
+            ${rule.settings.map((item, index) => `
+              ${rankRuleRow(item, index, rule.settings.length)}
+            `).join("")}
+          </div>
+          <button class="rule-add-row-button" type="button" data-add-rank-rule-row>
+            ${studyPayIcon("plus", "rule-add-row-icon")}
+            <span>条件を追加</span>
+          </button>
+          <button class="primary-button compact-button rule-save-button" type="submit">保存</button>
+          <button class="secondary-button compact-button rule-apply-subjects-button" type="button" data-apply-rule-to-subjects>他の科目にも適用する</button>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function rankRuleRow(item, index, rowCount) {
+  const rank = getRuleRank(item.condition);
+  const isFirst = index === 0;
+  const isLast = index === rowCount - 1;
+  const operator = isFirst ? "ー" : isLast ? "未満" : "以内";
+  const rankId = `rank-${index}`;
+  const rankCell =
+    isFirst || isLast
+      ? `<span class="fixed-rule-value rank-rule-rank"><span>${rank}</span><span class="fixed-rule-unit">位</span></span><input type="hidden" name="${rankId}" value="${rank}" />`
+      : `
+        <div class="rule-input-cell">
+          <div class="rule-input-unit-row">
+            <input type="number" name="${rankId}" inputmode="numeric" step="1" value="${rank}" />
+            <span class="rule-input-unit">位</span>
+          </div>
+          <span class="rule-input-error" data-rule-input-error></span>
         </div>
-        <div class="rule-table-editor rank-rule-table">
-          <div class="rule-table-head"><span>点数方式</span><span>順位方式</span><span>ポイント</span></div>
-          ${rule.settings.map((item, index) => `
-            <div class="rule-table-row">
-              <span class="fixed-rule-value rank-rule-score-condition">${escapeHtml(getRankScoreConditionLabel(index))}</span>
-              <span class="fixed-rule-value rank-rule-condition">${escapeHtml(item.condition)}</span>
-              <input type="hidden" name="condition-${index}" value="${escapeHtml(item.condition)}" />
-              <div class="rule-input-cell">
-                <div class="rule-input-unit-row">
-                  <input type="number" name="points-${index}" inputmode="numeric" step="1" value="${Number(item.points || 0)}" />
-                  <span class="rule-input-unit">pt</span>
-                </div>
-                <span class="rule-input-error" data-rule-input-error></span>
-              </div>
-            </div>
-          `).join("")}
+      `;
+
+  return `
+    <div class="rule-table-row">
+      ${rankCell}
+      <span class="fixed-rule-value rank-rule-condition">${operator}</span><input type="hidden" name="operator-${index}" value="${operator}" />
+      <div class="rule-input-cell">
+        <div class="rule-input-unit-row">
+          <input type="number" name="points-${index}" inputmode="numeric" step="1" value="${Number(item.points || 0)}" />
+          <span class="rule-input-unit">pt</span>
         </div>
-        <button class="secondary-button compact-button" type="submit">このルールを保存</button>
-      </form>
+        <span class="rule-input-error" data-rule-input-error></span>
+      </div>
+      ${
+        isFirst || isLast
+          ? `<span class="rule-row-action-spacer" aria-hidden="true"></span>`
+          : `
+            <button class="rule-row-delete-button" type="button" data-delete-rank-rule-row aria-label="${rank}位以内の条件を削除">
+              ${studyPayIcon("trash-2", "rule-row-delete-icon")}
+            </button>
+          `
+      }
     </div>
   `;
 }
@@ -2671,28 +2712,31 @@ function testRuleEditor(child, subject, ruleType, title, fullScore) {
   const isEnabled = rule.enabled !== false;
   const toggleLabel = isEnabled ? "無効にする" : "有効にする";
   return `
-    <form class="card rule-card point-rule-form ${isToggleable && !isEnabled ? "is-rule-disabled" : ""}" data-subject-id="${subject.id}" data-rule-type="${ruleType}" data-rule-category="test" data-full-score="${fullScore}" data-rule-enabled="${isEnabled ? "true" : "false"}">
-      <div class="test-rule-card-heading">
-        ${
-          isToggleable
-            ? `<button class="rule-enabled-toggle ${isEnabled ? "active" : ""}" type="button" data-toggle-test-rule-enabled aria-pressed="${isEnabled ? "true" : "false"}">${toggleLabel}</button>`
-            : `<span class="rule-heading-spacer" aria-hidden="true"></span>`
-        }
-        <span class="summary-kicker test-rule-card-title">${title}</span>
-        <button class="rule-reset-button" type="button" data-reset-test-rule>デフォルトに戻す</button>
-      </div>
-      <div class="rule-table-editor test-rule-table">
-        <div class="rule-table-head"><span>点数</span><span>条件</span><span>ポイント</span><span></span></div>
-        ${rule.settings.map((item, index) => `
-          ${testRuleRow(item, index, rule.settings.length, fullScore)}
-        `).join("")}
-      </div>
-      <button class="rule-add-row-button" type="button" data-add-test-rule-row>
-        ${studyPayIcon("plus", "rule-add-row-icon")}
-        <span>条件を追加</span>
-      </button>
-      <button class="secondary-button compact-button" type="submit">このルールを保存</button>
-    </form>
+    <div class="rule-card-block">
+      <form class="card rule-card point-rule-form ${isToggleable && !isEnabled ? "is-rule-disabled" : ""}" data-subject-id="${subject.id}" data-rule-type="${ruleType}" data-rule-category="test" data-full-score="${fullScore}" data-rule-enabled="${isEnabled ? "true" : "false"}">
+        <div class="test-rule-card-heading">
+          ${
+            isToggleable
+              ? `<button class="rule-enabled-toggle ${isEnabled ? "active" : ""}" type="button" data-toggle-test-rule-enabled aria-pressed="${isEnabled ? "true" : "false"}">${toggleLabel}</button>`
+              : `<span class="rule-heading-spacer" aria-hidden="true"></span>`
+          }
+          <span class="summary-kicker test-rule-card-title">${title}</span>
+          <button class="rule-reset-button" type="button" data-reset-test-rule>デフォルトに戻す</button>
+        </div>
+        <div class="rule-table-editor test-rule-table">
+          <div class="rule-table-head"><span>点数</span><span>条件</span><span>ポイント</span><span></span></div>
+          ${rule.settings.map((item, index) => `
+            ${testRuleRow(item, index, rule.settings.length, fullScore)}
+          `).join("")}
+        </div>
+        <button class="rule-add-row-button" type="button" data-add-test-rule-row>
+          ${studyPayIcon("plus", "rule-add-row-icon")}
+          <span>条件を追加</span>
+        </button>
+        <button class="primary-button compact-button rule-save-button" type="submit">保存</button>
+        <button class="secondary-button compact-button rule-apply-subjects-button" type="button" data-apply-rule-to-subjects>他の科目にも適用する</button>
+      </form>
+    </div>
   `;
 }
 
@@ -2742,30 +2786,48 @@ function gradeRulesPanel(child, subject, selectedGradeType) {
   const rule = getEffectivePointRule(child, subject.id, selectedGradeType);
   const settings = normalizeGradeSettings(selectedGradeType, rule.settings);
   return `
-    <div class="card rule-card">
-      <div class="field">
-        <label for="rule-grade-type">方式</label>
-        <select id="rule-grade-type">
-          <option value="grade_5" ${selectedAttr(selectedGradeType, "grade_5")}>5段階評価</option>
-          <option value="grade_3" ${selectedAttr(selectedGradeType, "grade_3")}>3段階評価</option>
-          <option value="grade_2" ${selectedAttr(selectedGradeType, "grade_2")}>2段階評価</option>
-          <option value="grade_abc" ${selectedAttr(selectedGradeType, "grade_abc")}>A/B/C評価</option>
-        </select>
+    <div class="rule-card-block">
+      <span class="rule-table-label">基準</span>
+      <div class="card rule-card">
+        <form class="point-rule-form" data-subject-id="${subject.id}" data-rule-type="${selectedGradeType}" data-rule-category="grade">
+          <div class="rule-table-editor grade-rule-table">
+            <div class="rule-table-head"><span>評価</span><span>ポイント</span></div>
+            ${settings.map((item, index) => `
+              ${gradeRuleRow(item, index, index > 0)}
+            `).join("")}
+          </div>
+          <button class="rule-add-row-button" type="button" data-add-grade-rule-row>
+            ${studyPayIcon("plus", "rule-add-row-icon")}
+            <span>条件を追加</span>
+          </button>
+          <button class="primary-button compact-button rule-save-button" type="submit">保存</button>
+          <button class="secondary-button compact-button rule-apply-subjects-button" type="button" data-apply-rule-to-subjects>他の科目にも適用する</button>
+        </form>
       </div>
-      <form class="point-rule-form" data-subject-id="${subject.id}" data-rule-type="${selectedGradeType}" data-rule-category="grade">
-        <span class="summary-kicker">${ruleLabel(selectedGradeType)}</span>
-        <div class="rule-table-editor grade-rule-table">
-          <div class="rule-table-head"><span>評価</span><span>ポイント</span></div>
-          ${settings.map((item, index) => `
-            <div class="rule-table-row">
-              <input type="hidden" name="id-${index}" value="${escapeHtml(item.id || `evaluation-${index + 1}`)}" />
-              <input name="label-${index}" value="${escapeHtml(item.label || item.condition)}" autocomplete="off" />
-              <input name="points-${index}" inputmode="numeric" value="${Number(item.points || 0)}" />
-            </div>
-          `).join("")}
-        </div>
-        <button class="secondary-button compact-button" type="submit">このルールを保存</button>
-      </form>
+    </div>
+  `;
+}
+
+function gradeRuleRow(item, index, canDelete) {
+  const label = item.label || item.condition || "";
+  return `
+    <div class="rule-table-row">
+      <input type="hidden" name="id-${index}" value="${escapeHtml(item.id || `evaluation-${index + 1}`)}" />
+      <div class="rule-input-cell">
+        <input name="label-${index}" value="${escapeHtml(label)}" autocomplete="off" />
+        <span class="rule-input-error" data-rule-input-error></span>
+      </div>
+      <div class="rule-input-cell">
+        <input name="points-${index}" inputmode="numeric" value="${Number(item.points || 0)}" />
+        <span class="rule-input-error" data-rule-input-error></span>
+      </div>
+      ${
+        canDelete
+          ? `<button class="rule-row-delete-button" type="button" data-delete-grade-rule-row aria-label="${escapeHtml(label || "追加した条件")}を削除">
+              ${studyPayIcon("trash-2", "rule-row-delete-icon")}
+            </button>`
+          : ""
+      }
     </div>
   `;
 }
@@ -3104,17 +3166,8 @@ function childApplyView(child, editingApplication = null) {
         </div>
 
         <div class="apply-section hidden" data-apply-section="grade">
-          <div class="field">
-            <label for="grade-type">評価種別</label>
-            <select id="grade-type" name="gradeType">
-              <option value="grade_5" ${selectedAttr(editingApplication?.gradeType || "grade_5", "grade_5")}>5段階評価</option>
-              <option value="grade_3" ${selectedAttr(editingApplication?.gradeType || "grade_5", "grade_3")}>3段階評価</option>
-              <option value="grade_2" ${selectedAttr(editingApplication?.gradeType || "grade_5", "grade_2")}>2段階評価</option>
-              <option value="grade_abc" ${selectedAttr(editingApplication?.gradeType || "grade_5", "grade_abc")}>A/B/C評価</option>
-            </select>
-          </div>
           <div class="field" id="grade-evaluation-field">
-            ${gradeEvaluationSelect(child, selectedSubjectId, editingApplication?.gradeType || "grade_5", editingApplication)}
+            ${gradeEvaluationSelect(child, selectedSubjectId, editingApplication)}
           </div>
         </div>
 
@@ -3152,10 +3205,10 @@ function childApplyView(child, editingApplication = null) {
   `;
 }
 
-function gradeEvaluationSelect(child, subjectId, gradeType, editingApplication = null) {
+function gradeEvaluationSelect(child, subjectId, editingApplication = null) {
   const subject = getActiveSubjects(child).find((item) => item.id === subjectId) || getActiveSubjects(child)[0];
-  const rule = getEffectivePointRule(child, subject?.id || "", gradeType || "grade_5");
-  const settings = normalizeGradeSettings(gradeType || "grade_5", rule.settings);
+  const rule = getEffectivePointRule(child, subject?.id || "", "grade_5");
+  const settings = normalizeGradeSettings("grade_5", rule.settings);
   return `
     <label for="grade-evaluation-id">評価</label>
     <select id="grade-evaluation-id" name="gradeEvaluationId">
@@ -3165,7 +3218,7 @@ function gradeEvaluationSelect(child, subjectId, gradeType, editingApplication =
         </option>
       `).join("")}
     </select>
-    <span class="field-help">保護者が設定した評価項目から選びます。</span>
+    <span class="field-help">この中にない場合は保護者に追加してもらってください</span>
   `;
 }
 
@@ -3421,7 +3474,7 @@ function childHeader(label) {
   return `
     <div class="topbar child-topbar">
       <div class="brand">
-        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase215" alt="INCE" />
+        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase285" alt="allowa" />
       </div>
       <div class="child-profile-pill">
         <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -3476,7 +3529,7 @@ function bottomNav(active) {
   const notificationCount = getUnreadNotifications(parent).length;
   const items = [
     ["home", studyPayIcon("house", "nav-lucide-icon"), "ホーム", "/parent", 0],
-    ["requests", studyPayIcon("laugh", "nav-lucide-icon"), "やった！", "/parent/applications", requestCount],
+    ["requests", studyPayIcon("file-check", "nav-lucide-icon"), "ポイント申請", "/parent/applications", requestCount],
     ["redemptions", studyPayIcon("hand-coins", "nav-lucide-icon"), "おこづかい", "/parent/redemptions", redemptionCount],
     ["notifications", studyPayIcon("bell", "nav-lucide-icon"), "通知", "/parent/notifications", notificationCount],
     ["settings", studyPayIcon("settings", "nav-lucide-icon"), "設定", "/parent/settings", 0],
@@ -4480,7 +4533,55 @@ function bindPointRules(child) {
 
     subjectMenu.hidden = true;
     subjectTrigger?.setAttribute("aria-expanded", "false");
-  }, { once: true });
+  });
+
+  const gradeTypeTrigger = document.querySelector("#rule-grade-type-trigger");
+  const gradeTypeMenu = document.querySelector("#rule-grade-type-menu");
+  const closeGradeTypeMenu = () => {
+    if (gradeTypeMenu) {
+      gradeTypeMenu.hidden = true;
+    }
+    gradeTypeTrigger?.setAttribute("aria-expanded", "false");
+  };
+  gradeTypeTrigger?.addEventListener("click", () => {
+    if (!gradeTypeMenu) {
+      return;
+    }
+
+    gradeTypeMenu.hidden = !gradeTypeMenu.hidden;
+    gradeTypeTrigger.setAttribute("aria-expanded", String(!gradeTypeMenu.hidden));
+  });
+
+  document.querySelectorAll("[data-rule-grade-type-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextGradeType = button.dataset.ruleGradeTypeOption;
+      const currentGradeType = child.ruleEditorGradeType || "grade_5";
+      closeGradeTypeMenu();
+      if (!nextGradeType || nextGradeType === currentGradeType) {
+        return;
+      }
+
+      if (hasUnsavedPointRuleChanges() && !document.querySelector("#point-rule-leave-modal")) {
+        showPointRuleLeaveModal("", () => {
+          updateChild(child.id, { ruleEditorGradeType: nextGradeType });
+          render();
+        }, "切り替える");
+        return;
+      }
+
+      updateChild(child.id, { ruleEditorGradeType: nextGradeType });
+      render();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!gradeTypeMenu || gradeTypeMenu.hidden || event.target.closest(".rule-grade-type-picker")) {
+      return;
+    }
+
+    gradeTypeMenu.hidden = true;
+    gradeTypeTrigger?.setAttribute("aria-expanded", "false");
+  });
 
   document.querySelector("#rule-subject-select")?.addEventListener("change", (event) => {
     if (event.currentTarget.value === "__add_subject__") {
@@ -4501,14 +4602,22 @@ function bindPointRules(child) {
 
   document.querySelectorAll("[data-rule-test-method]").forEach((button) => {
     button.addEventListener("click", () => {
-      updateChild(child.id, { ruleEditorTestMethod: button.dataset.ruleTestMethod });
+      const nextMethod = button.dataset.ruleTestMethod;
+      if (nextMethod === child.ruleEditorTestMethod) {
+        return;
+      }
+
+      if (hasUnsavedPointRuleChanges() && !document.querySelector("#point-rule-leave-modal")) {
+        showPointRuleLeaveModal("", () => {
+          updateChild(child.id, { ruleEditorTestMethod: nextMethod });
+          render();
+        }, "切り替える");
+        return;
+      }
+
+      updateChild(child.id, { ruleEditorTestMethod: nextMethod });
       render();
     });
-  });
-
-  document.querySelector("#rule-grade-type")?.addEventListener("change", (event) => {
-    updateChild(child.id, { ruleEditorGradeType: event.currentTarget.value });
-    render();
   });
 
   document.querySelectorAll("[data-add-test-rule-row]").forEach((button) => {
@@ -4518,6 +4627,28 @@ function bindPointRules(child) {
         return;
       }
       addTestRuleRow(form);
+      updatePointRuleDirtyState(form);
+    });
+  });
+
+  document.querySelectorAll("[data-add-rank-rule-row]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const form = button.closest(".point-rule-form");
+      if (form?.dataset.ruleEnabled === "false") {
+        return;
+      }
+      addRankRuleRow(form);
+      updatePointRuleDirtyState(form);
+    });
+  });
+
+  document.querySelectorAll("[data-add-grade-rule-row]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const form = button.closest(".point-rule-form");
+      if (form?.dataset.ruleEnabled === "false") {
+        return;
+      }
+      addGradeRuleRow(form);
       updatePointRuleDirtyState(form);
     });
   });
@@ -4545,6 +4676,17 @@ function bindPointRules(child) {
     });
   });
 
+  document.querySelectorAll("[data-apply-rule-to-subjects]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const form = button.closest(".point-rule-form");
+      if (!form || form.dataset.ruleEnabled === "false") {
+        return;
+      }
+
+      showApplyRuleToSubjectsModal(child, form);
+    });
+  });
+
   document.querySelectorAll("[data-delete-test-rule-row]").forEach((button) => {
     button.addEventListener("click", () => {
       const table = button.closest(".test-rule-table");
@@ -4560,23 +4702,55 @@ function bindPointRules(child) {
     });
   });
 
+  document.querySelectorAll("[data-delete-rank-rule-row]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const table = button.closest(".rank-rule-table");
+      const form = table?.closest(".point-rule-form");
+      if (form?.dataset.ruleEnabled === "false") {
+        return;
+      }
+      button.closest(".rule-table-row")?.remove();
+      syncRankRuleBoundaryRow(table);
+      validateTestRuleForm(form);
+      updateAddRankRuleButtonState(form);
+      updatePointRuleDirtyState(form);
+    });
+  });
+
+  document.querySelectorAll("[data-delete-grade-rule-row]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const form = button.closest(".point-rule-form");
+      if (form?.dataset.ruleEnabled === "false") {
+        return;
+      }
+      button.closest(".rule-table-row")?.remove();
+      updateAddGradeRuleButtonState(form);
+      updatePointRuleDirtyState(form);
+    });
+  });
+
   document.querySelectorAll(".point-rule-form").forEach((form) => {
     setPointRuleFormBaseline(form);
     validateTestRuleForm(form);
     updateAddTestRuleButtonState(form);
+    updateAddRankRuleButtonState(form);
+    updateAddGradeRuleButtonState(form);
     updateRuleFormEnabledState(form);
     form.querySelectorAll(".rule-table-editor input").forEach((input) => {
       input.addEventListener("input", () => {
+        syncRankRuleBoundaryRow(input.closest(".rank-rule-table"));
         validateTestRuleForm(form);
         updatePointRuleDirtyState(form);
       });
       input.addEventListener("blur", () => {
         syncTestRuleBoundaryRow(input.closest(".test-rule-table"));
+        syncRankRuleBoundaryRow(input.closest(".rank-rule-table"));
         validateTestRuleForm(form);
         updatePointRuleDirtyState(form);
       });
       input.addEventListener("change", () => {
         syncTestRuleBoundaryRow(input.closest(".test-rule-table"));
+        syncRankRuleBoundaryRow(input.closest(".rank-rule-table"));
         validateTestRuleForm(form);
         updatePointRuleDirtyState(form);
       });
@@ -4587,50 +4761,15 @@ function bindPointRules(child) {
       if (event.currentTarget.dataset.ruleEnabled === "false") {
         return;
       }
-      if (!validateTestRuleForm(event.currentTarget)) {
-        return;
-      }
-      const ruleCategory = event.currentTarget.dataset.ruleCategory;
-      const rows = Array.from(event.currentTarget.querySelectorAll(".rule-table-row"));
-      const settings = rows.map((row, index) => {
-        const points = Number(row.querySelector('[name^="points-"]')?.value || 0);
-        if (ruleCategory === "test") {
-          const score = row.querySelector('[name^="score-"]')?.value || "";
-          const operator = row.querySelector('[name^="operator-"]')?.value || "";
-          return {
-            condition: createScoreCondition(score, operator),
-            points,
-          };
-        }
-
-        if (ruleCategory === "rank") {
-          return {
-            condition: String(row.querySelector('[name^="condition-"]')?.value || "").trim(),
-            points,
-          };
-        }
-
-        return {
-          id: String(row.querySelector('[name^="id-"]')?.value || `evaluation-${index + 1}`),
-          label: String(row.querySelector('[name^="label-"]')?.value || "").trim(),
-          points,
-        };
-      });
-      const nextSettings =
-        ruleCategory === "test"
-          ? normalizeSavedTestSettings(settings, Number(event.currentTarget.dataset.fullScore || 100))
-          : ruleCategory === "rank"
-            ? normalizeRankSettings(settings)
-          : settings;
-
-      if (nextSettings.some((setting) => !(setting.condition || setting.label) || setting.points < 0)) {
+      const nextSettings = collectPointRuleSettings(event.currentTarget);
+      if (!nextSettings) {
         return;
       }
 
       updateSubjectPointRule(child.id, event.currentTarget.dataset.subjectId, event.currentTarget.dataset.ruleType, nextSettings);
       setPointRuleFormBaseline(event.currentTarget);
-      state.flash = "ポイントルールを保存しました。";
       render();
+      showPointRuleSavedModal();
     });
   });
 }
@@ -4679,6 +4818,132 @@ function addTestRuleRow(form) {
   });
 }
 
+function collectPointRuleSettings(form) {
+  if (!validateTestRuleForm(form)) {
+    return null;
+  }
+
+  const ruleCategory = form.dataset.ruleCategory;
+  const rows = Array.from(form.querySelectorAll(".rule-table-row"));
+  const settings = rows.map((row, index) => {
+    const points = Number(row.querySelector('[name^="points-"]')?.value || 0);
+    if (ruleCategory === "test") {
+      const score = row.querySelector('[name^="score-"]')?.value || "";
+      const operator = row.querySelector('[name^="operator-"]')?.value || "";
+      return {
+        condition: createScoreCondition(score, operator),
+        points,
+      };
+    }
+
+    if (ruleCategory === "rank") {
+      const rank = row.querySelector('[name^="rank-"]')?.value || "";
+      const operator = row.querySelector('[name^="operator-"]')?.value || "";
+      return {
+        condition: createRankCondition(rank, operator),
+        points,
+      };
+    }
+
+    return {
+      id: String(row.querySelector('[name^="id-"]')?.value || `evaluation-${index + 1}`),
+      label: String(row.querySelector('[name^="label-"]')?.value || "").trim(),
+      points,
+    };
+  });
+  const nextSettings =
+    ruleCategory === "test"
+      ? normalizeSavedTestSettings(settings, Number(form.dataset.fullScore || 100))
+      : ruleCategory === "rank"
+        ? normalizeRankSettings(settings)
+        : settings;
+
+  if (nextSettings.some((setting) => !(setting.condition || setting.label) || setting.points < 0)) {
+    return null;
+  }
+
+  return nextSettings;
+}
+
+function addRankRuleRow(form) {
+  const table = form?.querySelector(".rank-rule-table");
+  const rows = Array.from(table?.querySelectorAll(".rule-table-row") || []);
+  const lastRow = rows.at(-1);
+  if (!form || !table || !lastRow || rows.length < 2) {
+    return;
+  }
+
+  if (rows.length >= MAX_RANK_RULE_ROWS) {
+    updateAddRankRuleButtonState(form);
+    return;
+  }
+
+  const row = document.createElement("div");
+  row.className = "rule-table-row";
+  row.innerHTML = rankRuleDynamicRowHtml();
+  table.insertBefore(row, lastRow);
+  syncRankRuleBoundaryRow(table);
+  updateAddRankRuleButtonState(form);
+  row.querySelector("[data-delete-rank-rule-row]")?.addEventListener("click", () => {
+    row.remove();
+    syncRankRuleBoundaryRow(table);
+    validateTestRuleForm(form);
+    updateAddRankRuleButtonState(form);
+    updatePointRuleDirtyState(form);
+  });
+  row.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("input", () => {
+      syncRankRuleBoundaryRow(table);
+      validateTestRuleForm(form);
+      updatePointRuleDirtyState(form);
+    });
+    input.addEventListener("blur", () => {
+      syncRankRuleBoundaryRow(table);
+      validateTestRuleForm(form);
+      updatePointRuleDirtyState(form);
+    });
+    input.addEventListener("change", () => {
+      syncRankRuleBoundaryRow(table);
+      validateTestRuleForm(form);
+      updatePointRuleDirtyState(form);
+    });
+  });
+}
+
+function addGradeRuleRow(form) {
+  const table = form?.querySelector(".grade-rule-table");
+  if (!form || !table) {
+    return;
+  }
+
+  const rows = Array.from(table.querySelectorAll(".rule-table-row"));
+  if (rows.length >= MAX_GRADE_RULE_ROWS) {
+    updateAddGradeRuleButtonState(form);
+    return;
+  }
+
+  const row = document.createElement("div");
+  row.className = "rule-table-row";
+  row.innerHTML = gradeRuleDynamicRowHtml();
+  table.appendChild(row);
+  updateAddGradeRuleButtonState(form);
+  row.querySelector("[data-delete-grade-rule-row]")?.addEventListener("click", () => {
+    row.remove();
+    updateAddGradeRuleButtonState(form);
+    updatePointRuleDirtyState(form);
+  });
+  row.querySelectorAll("input").forEach((input) => {
+    input.addEventListener("input", () => {
+      validateTestRuleForm(form);
+      updatePointRuleDirtyState(form);
+    });
+    input.addEventListener("change", () => {
+      validateTestRuleForm(form);
+      updatePointRuleDirtyState(form);
+    });
+  });
+}
+
 function updateAddTestRuleButtonState(form) {
   const button = form?.querySelector("[data-add-test-rule-row]");
   const rowCount = form?.querySelectorAll(".test-rule-table .rule-table-row").length || 0;
@@ -4688,6 +4953,30 @@ function updateAddTestRuleButtonState(form) {
 
   const isMax = rowCount >= getMaxTestRuleRows(form.dataset.ruleType);
   const isDisabled = form.dataset.ruleEnabled === "false" || isMax;
+  button.disabled = isDisabled;
+  button.setAttribute("aria-disabled", String(isDisabled));
+}
+
+function updateAddRankRuleButtonState(form) {
+  const button = form?.querySelector("[data-add-rank-rule-row]");
+  const rowCount = form?.querySelectorAll(".rank-rule-table .rule-table-row").length || 0;
+  if (!button) {
+    return;
+  }
+
+  const isDisabled = form.dataset.ruleEnabled === "false" || rowCount >= MAX_RANK_RULE_ROWS;
+  button.disabled = isDisabled;
+  button.setAttribute("aria-disabled", String(isDisabled));
+}
+
+function updateAddGradeRuleButtonState(form) {
+  const button = form?.querySelector("[data-add-grade-rule-row]");
+  const rowCount = form?.querySelectorAll(".grade-rule-table .rule-table-row").length || 0;
+  if (!button) {
+    return;
+  }
+
+  const isDisabled = form.dataset.ruleEnabled === "false" || rowCount >= MAX_GRADE_RULE_ROWS;
   button.disabled = isDisabled;
   button.setAttribute("aria-disabled", String(isDisabled));
 }
@@ -4729,7 +5018,10 @@ function serializePointRuleForm(form) {
     ruleType: form?.dataset.ruleType || "",
     enabled: form?.dataset.ruleEnabled || "true",
     rows: rows.map((row) => ({
+      id: row.querySelector('[name^="id-"]')?.value || "",
+      label: row.querySelector('[name^="label-"]')?.value || "",
       score: row.querySelector('[name^="score-"]')?.value || "",
+      rank: row.querySelector('[name^="rank-"]')?.value || "",
       operator: row.querySelector('[name^="operator-"]')?.value || "",
       points: row.querySelector('[name^="points-"]')?.value || "",
     })),
@@ -4752,7 +5044,7 @@ function shouldConfirmPointRuleLeave(nextPath) {
   return hasUnsavedPointRuleChanges();
 }
 
-function showPointRuleLeaveModal(nextPath) {
+function showPointRuleLeaveModal(nextPath, onConfirm = null, confirmLabel = "移動する") {
   document.querySelector("#point-rule-leave-modal")?.remove();
   const modal = document.createElement("div");
   modal.className = "parent-switch-modal";
@@ -4760,9 +5052,9 @@ function showPointRuleLeaveModal(nextPath) {
   modal.innerHTML = `
     <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="point-rule-leave-title">
       <h2 id="point-rule-leave-title">保存していない変更があります</h2>
-      <p>このまま移動すると、保存していないポイント付与ルールの変更は反映されません。</p>
+      <p>このまま進むと、保存していないポイント基準の変更は反映されません。</p>
       <div class="confirm-actions">
-        <button class="danger-button child-delete-modal-confirm" type="button" id="confirm-point-rule-leave">移動する</button>
+        <button class="danger-button child-delete-modal-confirm" type="button" id="confirm-point-rule-leave">${escapeHtml(confirmLabel)}</button>
         <button class="secondary-button" type="button" id="cancel-point-rule-leave">この画面に戻る</button>
       </div>
     </div>
@@ -4773,8 +5065,38 @@ function showPointRuleLeaveModal(nextPath) {
   document.querySelector("#cancel-point-rule-leave")?.addEventListener("click", closeModal);
   document.querySelector("#confirm-point-rule-leave")?.addEventListener("click", () => {
     closeModal();
+    if (typeof onConfirm === "function") {
+      onConfirm();
+      return;
+    }
+
     location.hash = nextPath;
   });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+}
+
+function showPointRuleSavedModal() {
+  document.querySelector("#point-rule-saved-modal")?.remove();
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal";
+  modal.id = "point-rule-saved-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel point-rule-saved-modal-panel" role="dialog" aria-modal="true" aria-labelledby="point-rule-saved-title">
+      <h2 id="point-rule-saved-title">保存しました</h2>
+      <p>ポイント基準の変更を保存しました。</p>
+      <div class="confirm-actions">
+        <button class="primary-button" type="button" id="confirm-point-rule-saved">OK</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  document.querySelector("#confirm-point-rule-saved")?.addEventListener("click", closeModal);
   modal.addEventListener("click", (event) => {
     if (event.target === modal) {
       closeModal();
@@ -4787,6 +5109,15 @@ function getMaxTestRuleRows(ruleType) {
 }
 
 function validateTestRuleForm(form) {
+  if (form?.dataset.ruleCategory === "grade") {
+    return validateGradeRuleForm(form);
+  }
+
+  const rankTable = form?.querySelector(".rank-rule-table");
+  if (rankTable) {
+    return validateRankRuleForm(form);
+  }
+
   const table = form?.querySelector(".test-rule-table");
   const rows = Array.from(table?.querySelectorAll(".rule-table-row") || []);
   if (!rows.length) {
@@ -4838,6 +5169,84 @@ function validateTestRuleForm(form) {
   return isValid;
 }
 
+function validateGradeRuleForm(form) {
+  const rows = Array.from(form?.querySelectorAll(".grade-rule-table .rule-table-row") || []);
+  if (!rows.length) {
+    return true;
+  }
+
+  let isValid = true;
+  rows.forEach((row) => {
+    const labelInput = row.querySelector('input[name^="label-"]');
+    const pointsInput = row.querySelector('input[name^="points-"]');
+
+    if (labelInput) {
+      const message = labelInput.value.trim() ? "" : "評価を入力してください";
+      setRuleInputError(labelInput, message);
+      isValid = isValid && !message;
+    }
+
+    if (pointsInput) {
+      const value = getInputNumber(pointsInput);
+      const message =
+        value == null
+          ? "ポイントを入力してください"
+          : value < 0
+            ? "0以上で入力してください"
+            : "";
+      setRuleInputError(pointsInput, message);
+      isValid = isValid && !message;
+    }
+  });
+
+  return isValid;
+}
+
+function validateRankRuleForm(form) {
+  const rows = Array.from(form?.querySelectorAll(".rank-rule-table .rule-table-row") || []);
+  if (!rows.length) {
+    return true;
+  }
+
+  let isValid = true;
+  rows.forEach((row, index) => {
+    const rankInput = row.querySelector('input[name^="rank-"]:not([type="hidden"])');
+    const pointsInput = row.querySelector('input[name^="points-"]');
+
+    if (rankInput) {
+      const value = getInputNumber(rankInput);
+      const upperRank = getRuleRowNumber(rows[index - 1], "rank");
+      const lowerRank = getNextEditableRuleRank(rows, index);
+      const message =
+        value == null
+          ? "順位を入力してください"
+          : upperRank != null && value <= upperRank
+            ? `上の順位（${upperRank}位）より大きくしてください`
+            : lowerRank != null && value >= lowerRank
+              ? `下の順位（${lowerRank}位）より小さくしてください`
+              : value < 1
+                ? "1以上で入力してください"
+                : "";
+      setRuleInputError(rankInput, message);
+      isValid = isValid && !message;
+    }
+
+    if (pointsInput) {
+      const value = getInputNumber(pointsInput);
+      const message =
+        value == null
+          ? "ポイントを入力してください"
+          : value < 0
+            ? "0以上で入力してください"
+            : "";
+      setRuleInputError(pointsInput, message);
+      isValid = isValid && !message;
+    }
+  });
+
+  return isValid;
+}
+
 function setRuleInputError(input, message) {
   const error = input?.closest(".rule-input-cell")?.querySelector("[data-rule-input-error]");
   if (!error) {
@@ -4875,6 +5284,16 @@ function getNextEditableRuleScore(rows, index) {
   return null;
 }
 
+function getNextEditableRuleRank(rows, index) {
+  for (let i = index + 1; i < rows.length - 1; i += 1) {
+    const rank = getRuleRowNumber(rows[i], "rank");
+    if (rank != null) {
+      return rank;
+    }
+  }
+  return null;
+}
+
 function syncTestRuleBoundaryRow(table) {
   const rows = Array.from(table?.querySelectorAll(".rule-table-row") || []);
   if (rows.length < 2) {
@@ -4903,6 +5322,33 @@ function syncTestRuleBoundaryRow(table) {
   }
 }
 
+function syncRankRuleBoundaryRow(table) {
+  const rows = Array.from(table?.querySelectorAll(".rule-table-row") || []);
+  if (rows.length < 2) {
+    return;
+  }
+
+  const middleRanks = rows
+    .slice(1, -1)
+    .map((row) => getRuleRowNumber(row, "rank"))
+    .filter((rank) => rank > 1);
+  const boundaryRank = middleRanks.length ? Math.max(...middleRanks) : 1;
+  const lastRow = rows[rows.length - 1];
+  const fixedValue = lastRow.querySelector(".fixed-rule-value");
+  const fixedRankNumber = fixedValue?.querySelector("span");
+  const hiddenRank = lastRow.querySelector('[name^="rank-"]');
+
+  if (fixedRankNumber) {
+    fixedRankNumber.textContent = String(boundaryRank);
+  } else if (fixedValue) {
+    fixedValue.textContent = String(boundaryRank);
+  }
+
+  if (hiddenRank) {
+    hiddenRank.value = String(boundaryRank);
+  }
+}
+
 function testRuleDynamicRowHtml(score = "", points = "") {
   const rowId = `custom-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const deleteLabel = score === "" ? "追加した条件を削除" : `${score}点以上の欄を削除`;
@@ -4923,6 +5369,49 @@ function testRuleDynamicRowHtml(score = "", points = "") {
       <span class="rule-input-error" data-rule-input-error></span>
     </div>
     <button class="rule-row-delete-button" type="button" data-delete-test-rule-row aria-label="${deleteLabel}">
+      ${studyPayIcon("trash-2", "rule-row-delete-icon")}
+    </button>
+  `;
+}
+
+function rankRuleDynamicRowHtml(rank = "", points = "") {
+  const rowId = `rank-custom-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const deleteLabel = rank === "" ? "追加した条件を削除" : `${rank}位以内の条件を削除`;
+  return `
+    <div class="rule-input-cell">
+      <div class="rule-input-unit-row">
+        <input type="number" name="rank-${rowId}" inputmode="numeric" step="1" value="${rank}" />
+        <span class="rule-input-unit">位</span>
+      </div>
+      <span class="rule-input-error" data-rule-input-error></span>
+    </div>
+    <span class="fixed-rule-value rank-rule-condition">以内</span><input type="hidden" name="operator-${rowId}" value="以内" />
+    <div class="rule-input-cell">
+      <div class="rule-input-unit-row">
+        <input type="number" name="points-${rowId}" inputmode="numeric" step="1" value="${points}" />
+        <span class="rule-input-unit">pt</span>
+      </div>
+      <span class="rule-input-error" data-rule-input-error></span>
+    </div>
+    <button class="rule-row-delete-button" type="button" data-delete-rank-rule-row aria-label="${deleteLabel}">
+      ${studyPayIcon("trash-2", "rule-row-delete-icon")}
+    </button>
+  `;
+}
+
+function gradeRuleDynamicRowHtml(label = "", points = "") {
+  const rowId = `grade-custom-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `
+    <input type="hidden" name="id-${rowId}" value="${rowId}" />
+    <div class="rule-input-cell">
+      <input name="label-${rowId}" value="${escapeHtml(label)}" autocomplete="off" />
+      <span class="rule-input-error" data-rule-input-error></span>
+    </div>
+    <div class="rule-input-cell">
+      <input name="points-${rowId}" inputmode="numeric" value="${points}" />
+      <span class="rule-input-error" data-rule-input-error></span>
+    </div>
+    <button class="rule-row-delete-button" type="button" data-delete-grade-rule-row aria-label="${escapeHtml(label || "追加した条件")}を削除">
       ${studyPayIcon("trash-2", "rule-row-delete-icon")}
     </button>
   `;
@@ -5049,7 +5538,12 @@ function showRuleResetModal(child, subjectId, ruleType) {
 
   document.querySelector("#rule-reset-modal")?.remove();
   const modal = document.createElement("div");
-  const ruleTitle = ruleType === "test_50" ? "50点満点用" : "100点満点用";
+  const ruleTitle =
+    ruleType === "test_rank"
+      ? "順位基準"
+      : ruleType === "test_50"
+        ? "50点満点用"
+        : "100点満点用";
   modal.className = "parent-switch-modal rule-reset-modal";
   modal.id = "rule-reset-modal";
   modal.innerHTML = `
@@ -5079,12 +5573,108 @@ function showRuleResetModal(child, subjectId, ruleType) {
   });
 }
 
+function showApplyRuleToSubjectsModal(child, form) {
+  const settings = collectPointRuleSettings(form);
+  if (!settings) {
+    return;
+  }
+
+  const subjects = getActiveSubjects(child);
+  const targetSubjects = subjects.filter((subject) => subject.id !== form.dataset.subjectId);
+  const targetCount = targetSubjects.length;
+  if (!targetCount) {
+    state.flash = "適用できる他の科目がありません。";
+    render();
+    return;
+  }
+
+  document.querySelector("#apply-rule-subjects-modal")?.remove();
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal rule-reset-modal";
+  modal.id = "apply-rule-subjects-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="apply-rule-subjects-title">
+      <h2 id="apply-rule-subjects-title">他の科目にも適用しますか？</h2>
+      <p>現在の基準を、選択した科目に適用します。各科目で設定済みの同じ基準は置き換わります。</p>
+      <div class="field apply-rule-subject-field">
+        <span class="field-label">どの科目に適用しますか？</span>
+        <div class="rule-subject-picker apply-rule-subject-picker">
+          <button class="rule-subject-trigger" type="button" id="apply-rule-subject-trigger" aria-haspopup="menu" aria-expanded="false">
+            <span id="apply-rule-subject-label">すべて</span>
+            ${studyPayIcon("chevron-down", "rule-subject-trigger-icon")}
+          </button>
+          <div class="rule-subject-menu apply-rule-subject-menu" id="apply-rule-subject-menu" role="menu" hidden>
+            <div class="rule-subject-option-row active">
+              <button class="rule-subject-option-name" type="button" role="menuitem" data-apply-rule-subject-option="__all__">すべて</button>
+            </div>
+            ${targetSubjects.map((subject) => `
+              <div class="rule-subject-option-row">
+                <button class="rule-subject-option-name" type="button" role="menuitem" data-apply-rule-subject-option="${escapeHtml(subject.id)}">
+                  ${escapeHtml(subject.name)}
+                </button>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+        <input type="hidden" id="apply-rule-subject-value" value="__all__" />
+      </div>
+      <div class="confirm-actions">
+        <button class="primary-button" type="button" id="confirm-apply-rule-subjects">適用する</button>
+        <button class="secondary-button" type="button" id="cancel-apply-rule-subjects">キャンセル</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  const applySubjectTrigger = document.querySelector("#apply-rule-subject-trigger");
+  const applySubjectMenu = document.querySelector("#apply-rule-subject-menu");
+  applySubjectTrigger?.addEventListener("click", () => {
+    if (!applySubjectMenu) {
+      return;
+    }
+
+    applySubjectMenu.hidden = !applySubjectMenu.hidden;
+    applySubjectTrigger.setAttribute("aria-expanded", String(!applySubjectMenu.hidden));
+  });
+  document.querySelectorAll("[data-apply-rule-subject-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const value = button.dataset.applyRuleSubjectOption || "__all__";
+      const label = button.textContent.trim() || "すべて";
+      document.querySelector("#apply-rule-subject-value").value = value;
+      document.querySelector("#apply-rule-subject-label").textContent = label;
+      document.querySelectorAll("#apply-rule-subject-menu .rule-subject-option-row").forEach((row) => {
+        row.classList.toggle("active", row.contains(button));
+      });
+      applySubjectMenu.hidden = true;
+      applySubjectTrigger?.setAttribute("aria-expanded", "false");
+    });
+  });
+  document.querySelector("#cancel-apply-rule-subjects")?.addEventListener("click", closeModal);
+  document.querySelector("#confirm-apply-rule-subjects")?.addEventListener("click", () => {
+    const selectedSubjectId = document.querySelector("#apply-rule-subject-value")?.value || "__all__";
+    updatePointRuleForOtherSubjects(child.id, form.dataset.subjectId, form.dataset.ruleType, settings, selectedSubjectId);
+    state.flash = selectedSubjectId === "__all__" ? "他の科目にも適用しました。" : "選択した科目に適用しました。";
+    closeModal();
+    render();
+  });
+  modal.addEventListener("click", (event) => {
+    if (applySubjectMenu && !applySubjectMenu.hidden && !event.target.closest(".apply-rule-subject-picker")) {
+      applySubjectMenu.hidden = true;
+      applySubjectTrigger?.setAttribute("aria-expanded", "false");
+    }
+
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+}
+
 function bindChildApply(child, editingApplication = null) {
   bindChildShell();
   const applicationForm = document.querySelector("#application-form");
   const categorySelect = document.querySelector("#application-category");
   const subjectSelect = document.querySelector("#application-subject");
-  const gradeTypeSelect = document.querySelector("#grade-type");
   const fullScoreField = document.querySelector("#test-full-score-field");
   const fullScoreSelect = document.querySelector("#test-full-score");
   const photoInput = document.querySelector("#application-photos");
@@ -5106,7 +5696,7 @@ function bindChildApply(child, editingApplication = null) {
     if (!field) {
       return;
     }
-    field.innerHTML = gradeEvaluationSelect(child, subjectSelect.value, gradeTypeSelect.value, editingApplication);
+    field.innerHTML = gradeEvaluationSelect(child, subjectSelect.value, editingApplication);
   };
   const syncTestFullScoreField = () => {
     if (!fullScoreField || !fullScoreSelect) {
@@ -5140,7 +5730,6 @@ function bindChildApply(child, editingApplication = null) {
     syncTestFullScoreField();
     syncGradeEvaluations();
   });
-  gradeTypeSelect.addEventListener("change", syncGradeEvaluations);
   scoreInput?.addEventListener("input", clearScoreError);
   syncSections();
 
@@ -5203,7 +5792,7 @@ function bindChildApply(child, editingApplication = null) {
     }
 
     if (category !== "other" && totalPhotoCount < 1) {
-      error.textContent = "テスト・成績は写真を追加してください。";
+      error.textContent = "写真を追加してください";
       return;
     }
 
@@ -5216,7 +5805,7 @@ function bindChildApply(child, editingApplication = null) {
       subject,
       testFullScore: Number(form.get("testFullScore") || 100),
       score: Number(scoreText || 0),
-      gradeType: String(form.get("gradeType") || ""),
+      gradeType: category === "grade" ? "grade_5" : "",
       gradeEvaluationId: String(form.get("gradeEvaluationId") || ""),
       otherContent: String(form.get("otherContent") || "").trim(),
       requestedPoints: Number(form.get("requestedPoints") || 0) || null,
@@ -6332,7 +6921,7 @@ function markChildNotificationsRead(childId) {
 function exportPrototypeData() {
   const data = {
     exportedAt: new Date().toISOString(),
-    app: "ince-prototype",
+    app: "allowa-prototype",
     version: "phase11",
     localStorage: {
       [ACCOUNT_KEY]: localStorage.getItem(ACCOUNT_KEY),
@@ -6345,7 +6934,7 @@ function exportPrototypeData() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `ince-prototype-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `allowa-prototype-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -6672,6 +7261,50 @@ function updateSubjectPointRule(childId, subjectId, ruleType, settings) {
   saveAccount(nextParent);
 }
 
+function updatePointRuleForOtherSubjects(childId, sourceSubjectId, ruleType, settings, targetSubjectId = "__all__") {
+  const parent = loadAccount();
+  const now = new Date().toISOString();
+  const nextParent = {
+    ...parent,
+    children: (parent.children || []).map((child) => {
+      if (child.id !== childId) {
+        return child;
+      }
+
+      const subjects = getActiveSubjects(child).filter((subject) =>
+        subject.id !== sourceSubjectId && (targetSubjectId === "__all__" || subject.id === targetSubjectId),
+      );
+      const existingRules = child.pointRules || [];
+      let nextRules = [...existingRules];
+      subjects.forEach((subject) => {
+        const existingRule = nextRules.find((rule) => rule.subjectId === subject.id && rule.ruleType === ruleType);
+        const baseRule = getEffectivePointRule(child, subject.id, ruleType);
+        const nextRule = {
+          ...baseRule,
+          ...existingRule,
+          id: existingRule?.id || `rule-${Date.now()}-${subject.id}-${ruleType}`,
+          subjectId: subject.id,
+          ruleType,
+          category: ruleType.startsWith("grade_") ? "grade" : "test",
+          method: "tier",
+          preset: "custom",
+          settings: settings.map((setting) => ({ ...setting })),
+          updatedAt: now,
+        };
+        nextRules = existingRule
+          ? nextRules.map((rule) => (rule.id === existingRule.id ? nextRule : rule))
+          : [nextRule, ...nextRules];
+      });
+
+      return {
+        ...child,
+        pointRules: nextRules,
+      };
+    }),
+  };
+  saveAccount(nextParent);
+}
+
 function updateSubjectPointRuleEnabled(childId, subjectId, ruleType, enabled) {
   const parent = loadAccount();
   const nextParent = {
@@ -6793,11 +7426,10 @@ function createDefaultPointRules() {
       method: "rank",
       preset: "normal",
       settings: [
-        { condition: "1位", points: 100 },
-        { condition: "10位以内", points: 80 },
-        { condition: "30位以内", points: 50 },
-        { condition: "100位以内", points: 20 },
-        { condition: "100位未満", points: 5 },
+        { condition: "1位", points: 3000 },
+        { condition: "10位以内", points: 1000 },
+        { condition: "50位以内", points: 500 },
+        { condition: "50位未満", points: 100 },
       ],
     },
     {
@@ -6807,9 +7439,9 @@ function createDefaultPointRules() {
       method: "tier",
       preset: "normal",
       settings: [
-        { id: "evaluation-1", label: "5", points: 1000 },
-        { id: "evaluation-2", label: "4", points: 500 },
-        { id: "evaluation-3", label: "3", points: 100 },
+        { id: "evaluation-1", label: "A", points: 1000 },
+        { id: "evaluation-2", label: "B", points: 500 },
+        { id: "evaluation-3", label: "C", points: 100 },
       ],
     },
     {
@@ -7161,11 +7793,10 @@ function normalizeTestRule(rule, fullScore) {
 
 function normalizeRankRule(rule) {
   const fallback = [
-    { condition: "1位", points: 100 },
-    { condition: "10位以内", points: 80 },
-    { condition: "30位以内", points: 50 },
-    { condition: "100位以内", points: 20 },
-    { condition: "100位未満", points: 5 },
+    { condition: "1位", points: 3000 },
+    { condition: "10位以内", points: 1000 },
+    { condition: "50位以内", points: 500 },
+    { condition: "50位未満", points: 100 },
   ];
   const currentSettings = rule?.settings || [];
   return { ...rule, settings: normalizeRankSettings(currentSettings.length ? currentSettings : fallback) };
@@ -7173,24 +7804,43 @@ function normalizeRankRule(rule) {
 
 function normalizeRankSettings(settings = []) {
   const fallback = [
-    { condition: "1位", points: 100 },
-    { condition: "10位以内", points: 80 },
-    { condition: "30位以内", points: 50 },
-    { condition: "100位以内", points: 20 },
-    { condition: "100位未満", points: 5 },
+    { condition: "1位", points: 3000 },
+    { condition: "10位以内", points: 1000 },
+    { condition: "50位以内", points: 500 },
+    { condition: "50位未満", points: 100 },
   ];
-  const source = settings.length ? settings : [];
-  return fallback.map((fallbackSetting, index) => {
-    const setting = source[index] || fallbackSetting;
-    return {
-      condition: String(setting.condition || fallbackSetting.condition).trim(),
-      points: Number(setting.points ?? fallbackSetting.points ?? 0),
-    };
-  });
+  const source = settings.length >= 3 && !isLegacyRankSettings(settings) ? settings : fallback;
+  const first = source[0] || fallback[0];
+  const middle = source
+    .slice(1, -1)
+    .map((setting) => ({
+      condition: `${getRuleRank(setting.condition)}位以内`,
+      points: Number(setting.points ?? 0),
+    }))
+    .filter((setting) => getRuleRank(setting.condition) > 1)
+    .sort((a, b) => getRuleRank(a.condition) - getRuleRank(b.condition));
+  const normalizedMiddle = middle.length ? middle : fallback.slice(1, -1);
+  const boundaryRank = normalizedMiddle.length ? Math.max(...normalizedMiddle.map((setting) => getRuleRank(setting.condition))) : 50;
+  const last = source.at(-1) || fallback.at(-1);
+
+  return [
+    { condition: "1位", points: Number(first.points ?? fallback[0].points ?? 0) },
+    ...normalizedMiddle,
+    { condition: `${boundaryRank}位未満`, points: Number(last.points ?? fallback.at(-1)?.points ?? 0) },
+  ];
 }
 
-function getRankScoreConditionLabel(index) {
-  return ["100点満点", "90点以上", "70点以上", "50点以上", "50点未満"][index] || "";
+function isLegacyRankSettings(settings = []) {
+  if (settings.length !== 5) {
+    return false;
+  }
+
+  const ranks = settings.map((setting) => getRuleRank(setting.condition));
+  const points = settings.map((setting) => Number(setting.points || 0));
+  return (
+    ranks.join(",") === "1,10,30,100,100" ||
+    points.join(",") === "100,80,50,20,5"
+  );
 }
 
 function normalizeSavedTestSettings(settings, fullScore) {
@@ -7214,17 +7864,52 @@ function normalizeSavedTestSettings(settings, fullScore) {
 }
 
 function normalizeGradeSettings(ruleType, settings = []) {
-  const labels = {
-    grade_5: ["5", "4", "3", "2", "1"],
+  const labels = getDefaultGradeLabels(ruleType);
+  const source = isLegacyGradeSettings(settings) ? [] : settings;
+  const normalized = labels.map((label, index) => ({
+    id: source[index]?.id || `evaluation-${index + 1}`,
+    label: source[index]?.label || source[index]?.condition || label,
+    points: source[index]?.points ?? getDefaultGradePoints(ruleType)[index] ?? 0,
+  }));
+  const customSettings = source
+    .slice(labels.length)
+    .map((setting, index) => ({
+      id: setting.id || `custom-evaluation-${index + 1}`,
+      label: setting.label || setting.condition || "",
+      points: Number(setting.points || 0),
+    }))
+    .filter((setting) => setting.label);
+
+  return [...normalized, ...customSettings];
+}
+
+function getDefaultGradeLabels(ruleType) {
+  return {
+    grade_5: ["A", "B", "C"],
     grade_3: ["A", "B", "C"],
     grade_2: ["A", "B"],
     grade_abc: ["A", "B", "C"],
   }[ruleType] || ["A", "B", "C"];
-  return labels.map((label, index) => ({
-    id: settings[index]?.id || `evaluation-${index + 1}`,
-    label: settings[index]?.label || settings[index]?.condition || label,
-    points: settings[index]?.points ?? [1000, 700, 300, 100, 50][index] ?? 0,
-  }));
+}
+
+function getDefaultGradePoints(ruleType) {
+  return {
+    grade_5: [1000, 500, 100],
+    grade_3: [1000, 500, 100],
+    grade_2: [1000, 500],
+    grade_abc: [1000, 500, 100],
+  }[ruleType] || [1000, 500, 100];
+}
+
+function isLegacyGradeSettings(settings = []) {
+  const labels = settings.map((setting) => String(setting.label || setting.condition || ""));
+  const points = settings.map((setting) => Number(setting.points || 0));
+  return (
+    labels.join(",") === "5,4,3,2,1" ||
+    labels.join(",") === "5,4,3" ||
+    points.join(",") === "1000,700,300,100,50" ||
+    points.join(",") === "1000,500,100,100,50"
+  );
 }
 
 function getGradeEvaluation(child, values) {
@@ -7240,6 +7925,10 @@ function getEvaluationIdByLabel(settings, label) {
 }
 
 function getRuleScore(condition) {
+  return Number(String(condition || "").match(/\d+/)?.[0] || 0);
+}
+
+function getRuleRank(condition) {
   return Number(String(condition || "").match(/\d+/)?.[0] || 0);
 }
 
@@ -7260,6 +7949,15 @@ function createScoreCondition(scoreValue, operatorValue) {
     return "";
   }
   return operator === "満点" ? `${score}点` : `${score}点${operator}`;
+}
+
+function createRankCondition(rankValue, operatorValue) {
+  const rank = Number(rankValue || 0);
+  const operator = String(operatorValue || "以内");
+  if (!rank) {
+    return "";
+  }
+  return operator === "ー" ? `${rank}位` : `${rank}位${operator}`;
 }
 
 function canUseApp(status) {
@@ -7638,6 +8336,11 @@ function studyPayIcon(name, className = "") {
       <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/>
       <path d="M17.479 17.499A10.75 10.75 0 0 1 12 19c-4.664 0-8.282-2.626-9.938-6.652a1 1 0 0 1 0-.696A10.75 10.75 0 0 1 6.602 6.35"/>
       <path d="m2 2 20 20"/>
+    `,
+    "file-check": `
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+      <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+      <path d="m9 15 2 2 4-4"/>
     `,
     "hand-coins": `
       <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"/>
