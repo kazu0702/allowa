@@ -44,8 +44,8 @@ const state = {
   monthlyBonusChildId: "",
   parentApplicationsType: "points",
   parentApplicationsFilter: "all",
-  parentNotificationSource: "child",
   parentNotificationReadFilter: "unread",
+  childHistoryType: "points",
   childHistoryFilter: "all",
 };
 const cloudState = {
@@ -1155,26 +1155,6 @@ function parentHomeView() {
   const parent = state.parent || initialParent;
   const subscription = getSubscription(parent);
   const children = isPreviewNoChildren() ? [] : getChildren();
-  const childCount = children.length;
-  const pendingApplications = getParentApplications().filter((item) => item.application.status === "pending");
-  const pendingRedemptions = getParentRedemptions().filter((item) => item.redemption.status === "pending");
-  const paidAllowanceTotal = getParentMonthlyAllowanceTotal();
-  const unreadCount = getUnreadNotifications(parent).length;
-  const primaryActionRoute = pendingApplications.length
-    ? "/parent/applications"
-    : childCount === 0
-      ? "/parent/children/new"
-      : "/parent/children";
-  const primaryActionLabel = pendingApplications.length
-    ? "申請を確認する"
-    : childCount === 0
-      ? "こどもを追加する"
-      : "こども一覧を見る";
-  const primaryActionCopy = pendingApplications.length
-    ? "確認待ちの申請があります。時間のあるときにまとめて見られます。"
-    : childCount === 0
-      ? "まずはこどもを追加して、ログイン情報を発行します。"
-      : "今日は急ぎの申請はありません。こども情報やルールを確認できます。";
   return `
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
@@ -1195,33 +1175,6 @@ function parentHomeView() {
       </div>
 
       ${subscription.status === "grace_period" ? `<div class="notice-card">支払い確認中です。猶予期間中は通常どおり利用できます。</div>` : ""}
-
-      ${childCount > 0 ? `
-        <div class="card home-overview-card">
-          <div class="overview-head">
-            <div>
-              <span class="summary-kicker">未確認の申請</span>
-              <div class="summary-number">${pendingApplications.length}件</div>
-              <p>${primaryActionCopy}</p>
-            </div>
-          </div>
-          <div class="metric-grid">
-            <div class="metric-item">
-              <span>おこづかい申請</span>
-              <strong>${pendingRedemptions.length}件</strong>
-            </div>
-            <div class="metric-item">
-              <span>今月支給</span>
-              <strong>${paidAllowanceTotal.toLocaleString()}円</strong>
-            </div>
-            <div class="metric-item">
-              <span>未読通知</span>
-              <strong>${unreadCount}件</strong>
-            </div>
-          </div>
-          <button class="primary-button compact-button" type="button" data-route="${primaryActionRoute}">${primaryActionLabel}</button>
-        </div>
-      ` : ""}
 
       ${parentHomeChildrenStatus(children)}
 
@@ -1265,7 +1218,7 @@ function parentHomeChildrenStatus(children) {
   return `
     <section class="parent-child-status-section">
       <div class="parent-child-status-list">
-        ${children.map(parentHomeChildStatusCard).join("")}
+        ${children.map(parentHomeChildStatusBlock).join("")}
       </div>
       ${canAdd ? `<button class="primary-button compact-button parent-child-add-button" type="button" data-route="/parent/children/new">こどもを追加する</button>` : ""}
     </section>
@@ -1286,6 +1239,15 @@ function childAvatar(child, className = "") {
           : studyPayIcon("circle-user-round", "profile-avatar-icon")
       }
     </span>
+  `;
+}
+
+function parentHomeChildStatusBlock(child) {
+  return `
+    <div class="parent-child-status-block">
+      ${parentHomeChildStatusCard(child)}
+      ${childPointExchangeUnitCard(child)}
+    </div>
   `;
 }
 
@@ -1327,53 +1289,32 @@ function parentChildStatusValue(value, unit) {
 
 function parentNotificationsView() {
   const parent = loadAccount() || state.parent || initialParent;
-  const sourceFilter = state.parentNotificationSource || "child";
   const readFilter = state.parentNotificationReadFilter || "unread";
-  const notifications = parent.notifications || [];
-  const sourceFilteredNotifications = filterParentNotificationsBySource(notifications, sourceFilter);
-  const visibleNotifications = filterNotificationsByReadState(sourceFilteredNotifications, readFilter);
+  const notifications = getParentAnnouncements(parent);
+  const visibleNotifications = filterNotificationsByReadState(notifications, readFilter);
   return `
-    <section class="screen home-screen">
-      ${parentPlainHeader("通知")}
-      ${parentNotificationSourceTabs(sourceFilter, notifications)}
+    <section class="screen home-screen notification-screen">
+      ${parentPlainHeader("お知らせ")}
 
       <div class="parent-notification-list-head">
+        ${notifications.length ? `<button class="parent-notification-read-all-button" type="button" id="read-parent-notifications">すべて既読にする</button>` : "<span></span>"}
         ${parentNotificationReadTabs(readFilter)}
       </div>
 
-      ${notificationList(visibleNotifications)}
-
-      ${parent.notifications?.length ? `<button class="secondary-button" type="button" id="read-parent-notifications">すべて既読にする</button>` : ""}
+      ${notificationList(visibleNotifications, { owner: "parent" })}
 
       ${bottomNav("notifications")}
     </section>
   `;
 }
 
-function parentNotificationSourceTabs(activeSource, notifications = []) {
-  const childUnreadCount = filterNotificationsByReadState(filterParentNotificationsBySource(notifications, "child"), "unread").length;
-  const systemUnreadCount = filterNotificationsByReadState(filterParentNotificationsBySource(notifications, "system"), "unread").length;
-  return `
-    <div class="parent-notification-source-tabs" role="tablist" aria-label="通知元">
-      ${parentNotificationSourceTab("child", "こどもから", activeSource, childUnreadCount)}
-      ${parentNotificationSourceTab("system", "システム／運営から", activeSource, systemUnreadCount)}
-    </div>
-  `;
-}
-
-function parentNotificationSourceTab(value, label, activeSource, unreadCount) {
-  const isActive = value === activeSource;
-  return `
-    <button class="${isActive ? "active" : ""}" type="button" role="tab" aria-selected="${isActive ? "true" : "false"}" data-parent-notification-source="${value}">
-      ${label}
-      ${unreadCount > 0 ? `<span class="parent-notification-source-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}
-    </button>
-  `;
+function getParentAnnouncements(parent) {
+  return (parent?.notifications || []).filter((notification) => parentNotificationSource(notification) === "system");
 }
 
 function parentNotificationReadTabs(activeFilter) {
   return `
-    <div class="parent-notification-read-tabs" role="tablist" aria-label="通知の表示">
+    <div class="parent-notification-read-tabs" role="tablist" aria-label="お知らせの表示">
       ${parentNotificationReadTab("unread", "未読", activeFilter)}
       ${parentNotificationReadTab("read", "既読", activeFilter)}
     </div>
@@ -1389,15 +1330,12 @@ function parentNotificationReadTab(value, label, activeFilter) {
   `;
 }
 
-function filterParentNotificationsBySource(notifications, source) {
-  return notifications.filter((notification) => {
-    const isChildSource = parentNotificationSource(notification) === "child";
-    return source === "child" ? isChildSource : !isChildSource;
-  });
-}
-
 function parentNotificationSource(notification) {
   const type = notification.type || "";
+  if (type === "demo_ready" || type.startsWith("demo_system")) {
+    return "system";
+  }
+
   const childSourceTypes = new Set([
     "application_submitted",
     "application_updated",
@@ -1528,7 +1466,7 @@ function parentDataSettingsView() {
     `
       <div class="card detail-card danger-zone">
         ${flashMessage ? `<div class="success">${escapeHtml(flashMessage)}</div>` : ""}
-        <p class="card-copy">MVP検証用に、この端末に保存されているデータをバックアップできます。初期化すると登録情報・こども・申請・通知が消えます。</p>
+        <p class="card-copy">MVP検証用に、この端末に保存されているデータをバックアップできます。初期化すると登録情報・こども・申請・お知らせが消えます。</p>
         <button class="primary-button compact-button" type="button" id="create-demo-data">デモデータを作成</button>
         <button class="secondary-button compact-button" type="button" id="export-prototype-data">データを書き出す</button>
         <button class="danger-button compact-button" type="button" id="show-reset-prototype-data">プロトタイプを初期化</button>
@@ -2016,6 +1954,15 @@ function parentApplicationCardTitle(application) {
 
 function parentApplicationCardSummary(application) {
   if (application.category === "test") {
+    if (application.testMethod === "rank") {
+      return `
+        <p>
+          <strong class="application-card-score">${Number(application.rank || 0).toLocaleString()}</strong>
+          <span class="application-card-score-unit"> 位</span>
+        </p>
+      `;
+    }
+
     const fullScore = Number(application.testFullScore) || 100;
     return `
       <p>
@@ -2377,6 +2324,15 @@ function parentRedemptionDetailView(child, redemption) {
 
 function parentReviewExtraFields(application, editable) {
   if (application.category === "test") {
+    if (application.testMethod === "rank") {
+      return `
+        <div class="field">
+          <label for="review-rank">順位</label>
+          <input id="review-rank" name="rank" inputmode="numeric" value="${application.rank || ""}" ${editable ? "" : "readonly"} />
+        </div>
+      `;
+    }
+
     return `
       <div class="field">
         <label for="review-score">点数</label>
@@ -2678,11 +2634,10 @@ function pointRulesView(child) {
   return `
     <section class="screen home-screen">
       ${parentPlainHeader("ポイント基準", `/parent/children/${child.id}`, "こども詳細に戻る")}
-      ${parentRuleFilterRow(selectedMode)}
-
       <div class="notice-card rule-notice">
         変更内容は今後の申請分にのみ適用となります。
       </div>
+      ${parentRuleFilterRow(selectedMode)}
 
       ${flashMessage ? `<div class="success">${escapeHtml(flashMessage)}</div>` : ""}
 
@@ -2785,17 +2740,163 @@ function parentRuleFilterButton(value, label, activeFilter) {
 }
 
 function parentRuleOtherPanel(child) {
+  const tasks = getOtherPointTasks(child);
+  const categories = getOtherTaskCategories(child);
+  const activeFilter = child.ruleOtherCategoryFilter || "all";
+  const visibleTasks = activeFilter === "all" ? tasks : tasks.filter((task) => (task.category || "その他") === activeFilter);
+  const isAdding = Boolean(child.ruleOtherTaskFormOpen);
+  const editingTask = tasks.find((task) => task.id === child.ruleOtherTaskEditingId) || null;
   return `
-    <div class="card detail-card">
-      <span class="summary-kicker">おこづかい申請単位</span>
-      <div class="segmented" role="group" aria-label="おこづかい申請単位">
+    <div class="rule-other-panel">
+      <div class="rule-other-head">
+        ${otherTaskCategoryFilter(categories, activeFilter)}
+        <button class="rule-other-add-button" type="button" data-open-other-task-form>
+          ${studyPayIcon("plus", "rule-add-row-icon")}
+          追加
+        </button>
+      </div>
+
+      <div class="rule-other-list">
+        <div class="rule-other-list-head">
+          <span>カテゴリー</span>
+          <span>タスク名</span>
+          <span>ポイント</span>
+          <span></span>
+        </div>
+        ${
+          tasks.length === 0
+            ? `<div class="rule-other-empty">タスクを追加してください</div>`
+            : visibleTasks.length
+              ? visibleTasks.map((task) => otherPointTaskRow(task, categories)).join("")
+              : `<div class="rule-other-empty">このカテゴリーのタスクはありません</div>`
+        }
+      </div>
+
+      ${isAdding ? otherPointTaskForm(child, editingTask) : ""}
+    </div>
+  `;
+}
+
+function otherTaskCategoryFilter(categories, activeFilter) {
+  const activeCategory = activeFilter === "all"
+    ? { name: "すべて", backgroundColor: "#f3eee9", textColor: "#5c3b22" }
+    : categories.find((item) => item.name === activeFilter) || getDefaultOtherTaskCategory(activeFilter);
+  return `
+    <div class="rule-subject-picker rule-other-filter-picker">
+      <button class="rule-subject-trigger rule-other-filter-trigger" type="button" id="rule-other-filter-trigger" aria-haspopup="menu" aria-expanded="false">
+        ${activeFilter === "all" ? `<span class="rule-other-filter-all">すべて</span>` : otherTaskCategoryTag(activeCategory)}
+        ${studyPayIcon("chevron-down", "rule-subject-trigger-icon")}
+      </button>
+      <div class="rule-subject-menu rule-other-filter-menu" id="rule-other-filter-menu" role="menu" hidden>
+        <button class="rule-other-filter-option ${activeFilter === "all" ? "active" : ""}" type="button" role="menuitem" data-rule-other-category-filter="all">
+          <span class="rule-other-filter-all">すべて</span>
+        </button>
+        ${categories.map((item) => `
+          <button class="rule-other-filter-option ${item.name === activeFilter ? "active" : ""}" type="button" role="menuitem" data-rule-other-category-filter="${escapeHtml(item.name)}">
+            ${otherTaskCategoryTag(item)}
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function otherPointTaskRow(task, categories = []) {
+  const category = task.category || "その他";
+  const categorySetting = categories.find((item) => item.name === category) || getDefaultOtherTaskCategory(category);
+  return `
+    <div class="rule-other-row">
+      <span class="rule-other-category-tag" style="background:${escapeHtml(categorySetting.backgroundColor)};color:${escapeHtml(categorySetting.textColor)};">${escapeHtml(category)}</span>
+      <span class="rule-other-task-name">${escapeHtml(task.name)}</span>
+      <span class="rule-other-task-points">${Number(task.points || 0).toLocaleString()}<small>pt</small></span>
+      <span class="rule-other-actions">
+        <button class="rule-other-icon-button" type="button" data-edit-other-task="${escapeHtml(task.id)}" aria-label="${escapeHtml(task.name)}を編集">
+          ${studyPayIcon("square-pen", "rule-subject-action-icon")}
+        </button>
+        <button class="rule-other-icon-button is-danger" type="button" data-delete-other-task="${escapeHtml(task.id)}" aria-label="${escapeHtml(task.name)}を削除">
+          ${studyPayIcon("trash-2", "rule-subject-action-icon")}
+        </button>
+      </span>
+    </div>
+  `;
+}
+
+function otherPointTaskForm(child, task = null) {
+  const isEditing = Boolean(task);
+  const category = task?.category || "その他";
+  const categories = getOtherTaskCategories(child);
+  const selectedCategory = categories.find((item) => item.name === category) || getDefaultOtherTaskCategory(category);
+  return `
+    <div class="parent-switch-modal rule-other-task-modal" id="other-task-modal">
+      <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="other-task-modal-title">
+        <form class="rule-other-form" id="other-task-form" novalidate>
+          <div class="test-rule-card-heading rule-other-form-heading">
+            <span class="rule-heading-spacer"></span>
+            <strong class="test-rule-card-title" id="other-task-modal-title">${isEditing ? "タスク編集" : "タスク追加"}</strong>
+            <span class="rule-heading-spacer"></span>
+          </div>
+          <input type="hidden" name="taskId" value="${escapeHtml(task?.id || "")}" />
+          <div class="rule-edit-grid">
+            <div class="rule-edit-field">
+              <div class="rule-edit-label-row">
+                <label for="other-task-category">カテゴリー</label>
+                <button class="rule-category-add-button" type="button" data-open-other-category-modal>カテゴリー追加</button>
+              </div>
+              <input type="hidden" id="other-task-category" name="category" value="${escapeHtml(selectedCategory.name)}" />
+              <div class="rule-subject-picker rule-other-category-picker">
+                <button class="rule-subject-trigger rule-other-category-trigger" type="button" id="other-task-category-trigger" aria-haspopup="menu" aria-expanded="false">
+                  ${otherTaskCategoryTag(selectedCategory)}
+                  ${studyPayIcon("chevron-down", "rule-subject-trigger-icon")}
+                </button>
+                <div class="rule-subject-menu rule-other-category-menu" id="other-task-category-menu" role="menu" hidden>
+                  ${categories.map((item) => `
+                    <button class="rule-other-category-option ${item.name === selectedCategory.name ? "active" : ""}" type="button" role="menuitem" data-other-task-category="${escapeHtml(item.name)}">
+                      ${otherTaskCategoryTag(item)}
+                    </button>
+                  `).join("")}
+                </div>
+              </div>
+            </div>
+            <label class="rule-edit-field" for="other-task-name">
+              タスク名
+              <input id="other-task-name" name="taskName" type="text" placeholder="例: お風呂そうじ" autocomplete="off" value="${escapeHtml(task?.name || "")}" />
+            </label>
+            <label class="rule-edit-field" for="other-task-points">
+              ポイント
+              <input id="other-task-points" name="points" inputmode="numeric" placeholder="例: 100" value="${escapeHtml(String(task?.points || ""))}" />
+            </label>
+          </div>
+          <p class="error" id="other-task-error"></p>
+          <div class="rule-other-form-actions">
+            <button class="secondary-button compact-button" type="button" data-close-other-task-form>キャンセル</button>
+            <button class="primary-button compact-button" type="submit">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function otherTaskCategoryTag(category) {
+  return `
+    <span class="rule-other-category-tag rule-other-category-select-tag" style="background:${escapeHtml(category.backgroundColor)};color:${escapeHtml(category.textColor || "#ffffff")};">
+      ${escapeHtml(category.name)}
+    </span>
+  `;
+}
+
+function childPointExchangeUnitCard(child) {
+  return `
+    <div class="card detail-card child-point-exchange-unit-card" data-exchange-unit-child-id="${escapeHtml(child.id)}">
+      <span class="summary-kicker">ポイント交換単位</span>
+      <div class="segmented" role="group" aria-label="ポイント交換単位">
         ${REDEMPTION_UNITS.map((unit) => `
           <button class="segment-button ${child.redemptionUnit === unit ? "active" : ""}" type="button" data-redemption-unit="${unit}">
             ${unit.toLocaleString()}pt
           </button>
         `).join("")}
       </div>
-      <p class="fine-print">こどものおこづかい申請で使う単位です。</p>
+      <p class="fine-print">こどもがおこづかい申請で使う単位です。</p>
     </div>
   `;
 }
@@ -3102,7 +3203,7 @@ function childHomeView(child) {
         </button>
         <button class="card child-quick-card" type="button" data-route="/child/notifications">
           <span>○</span>
-          <strong>通知</strong>
+          <strong>お知らせ</strong>
           <small>${unreadCount}件の未読</small>
         </button>
       </div>
@@ -3143,16 +3244,16 @@ function childRecentActivityCard(application) {
 
 function childNotificationsView(child) {
   return `
-    <section class="screen home-screen child-theme">
-      ${childHeader("通知")}
+    <section class="screen home-screen child-theme notification-screen">
+      ${childHeader("お知らせ")}
       <div class="page-heading">
         <div>
-          <h1>通知</h1>
+          <h1>お知らせ</h1>
           <p>未読 ${getUnreadNotifications(child).length} 件</p>
         </div>
       </div>
 
-      ${notificationList(child.notifications || [])}
+      ${notificationList(child.notifications || [], { owner: "child", childId: child.id })}
 
       ${child.notifications?.length ? `<button class="secondary-button" type="button" id="read-child-notifications">すべて既読にする</button>` : ""}
 
@@ -3269,6 +3370,7 @@ function childApplyView(child, editingApplication = null) {
   const showFullScoreSelect =
     Number(editingApplication?.testFullScore) === 50 || isPointRuleEnabled(child, initialSubjectId, "test_50");
   const selectedFullScore = showFullScoreSelect ? String(editingApplication?.testFullScore || 100) : "100";
+  const selectedTestMethod = editingApplication?.testMethod === "rank" || editingApplication?.rank ? "rank" : "score";
   return `
     <section class="screen home-screen child-theme">
       ${childHeader("申請")}
@@ -3302,6 +3404,14 @@ function childApplyView(child, editingApplication = null) {
         </div>
 
         <div class="apply-section" data-apply-section="test">
+          <div class="field rule-test-method-field">
+            <span class="field-label">基準</span>
+            <input type="hidden" id="test-method" name="testMethod" value="${selectedTestMethod}" />
+            <div class="rule-test-method-row child-apply-test-method-row" aria-label="テストの基準">
+              <button class="${selectedTestMethod === "score" ? "active" : ""}" type="button" data-child-test-method="score" aria-pressed="${selectedTestMethod === "score" ? "true" : "false"}">点数基準</button>
+              <button class="${selectedTestMethod === "rank" ? "active" : ""}" type="button" data-child-test-method="rank" aria-pressed="${selectedTestMethod === "rank" ? "true" : "false"}">順位基準</button>
+            </div>
+          </div>
           <div class="field ${showFullScoreSelect ? "" : "hidden"}" id="test-full-score-field">
             <label for="test-full-score">満点種別</label>
             <select id="test-full-score" name="testFullScore" ${showFullScoreSelect ? "" : "disabled"}>
@@ -3309,10 +3419,15 @@ function childApplyView(child, editingApplication = null) {
               <option value="50" ${selectedAttr(selectedFullScore, "50")}>50点満点</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field" id="test-score-field">
             <label for="test-score">点数</label>
             <input id="test-score" name="score" inputmode="numeric" placeholder="例: 92" value="${editingApplication?.score || ""}" />
             <span class="field-error" id="test-score-error"></span>
+          </div>
+          <div class="field hidden" id="test-rank-field">
+            <label for="test-rank">順位</label>
+            <input id="test-rank" name="rank" inputmode="numeric" placeholder="例: 10" value="${editingApplication?.rank || ""}" />
+            <span class="field-error" id="test-rank-error"></span>
           </div>
         </div>
 
@@ -3333,7 +3448,7 @@ function childApplyView(child, editingApplication = null) {
           </div>
         </div>
 
-        <div class="field">
+        <div class="field" id="application-photo-field">
           <label for="application-photos">写真</label>
           <input id="application-photos" name="photos" type="file" accept="image/*" multiple />
           <span class="field-help" id="photo-help">テスト・成績は1〜3枚まで。その他は写真なしでも申請できます。</span>
@@ -3375,21 +3490,27 @@ function gradeEvaluationSelect(child, subjectId, editingApplication = null) {
 
 function childHistoryView(child) {
   const applications = getChildApplications(child);
-  const activeFilter = state.childHistoryFilter || "all";
-  const filteredApplications = filterChildHistoryApplications(applications, activeFilter);
+  const redemptions = getChildRedemptions(child);
+  const activeType = state.childHistoryType || "points";
+  const isAllowance = activeType === "allowance";
+  const activeFilter = normalizeChildHistoryFilter(state.childHistoryFilter || "all", activeType);
+  state.childHistoryFilter = activeFilter;
+  const items = isAllowance ? redemptions : applications;
+  const filteredItems = isAllowance ? filterChildHistoryRedemptions(redemptions, activeFilter) : filterChildHistoryApplications(applications, activeFilter);
   return `
     <section class="screen home-screen child-theme">
       <div class="topbar child-topbar child-history-topbar">
         <h1>履歴</h1>
       </div>
-      ${childHistoryFilterRow(activeFilter)}
+      ${childHistoryTypeTabs(child, activeType)}
+      ${childHistoryFilterRow(activeFilter, activeType)}
       <div class="application-list">
         ${
-          applications.length === 0
-            ? `<div class="card empty-state"><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
-            : filteredApplications.length === 0
+          items.length === 0
+            ? `<div class="card empty-state"><strong>${isAllowance ? "おこづかい申請" : "申請"}はまだありません</strong><p>${isAllowance ? "ポイントが貯まったら申請できます。" : "最初のがんばりを申請してみましょう。"}</p></div>`
+            : filteredItems.length === 0
               ? `<div class="card empty-state"><strong>この状態の履歴はありません</strong><p>別の状態を選んで確認できます。</p></div>`
-              : filteredApplications.map(applicationCard).join("")
+              : filteredItems.map((item) => (isAllowance ? childHistoryRedemptionCard(item) : applicationCard(item))).join("")
         }
       </div>
 
@@ -3398,13 +3519,44 @@ function childHistoryView(child) {
   `;
 }
 
-function childHistoryFilterRow(activeFilter) {
+function childHistoryTypeTabs(child, activeType) {
+  const pendingApplicationCount = getChildApplications(child).filter((application) => application.status === "pending").length;
+  const pendingRedemptionCount = getChildRedemptions(child).filter((redemption) => redemption.status === "pending").length;
+  return `
+    <div class="child-history-type-tabs" role="tablist" aria-label="履歴の種類">
+      ${childHistoryTypeTab("points", "ポイント", activeType, pendingApplicationCount)}
+      ${childHistoryTypeTab("allowance", "おこづかい", activeType, pendingRedemptionCount)}
+    </div>
+  `;
+}
+
+function childHistoryTypeTab(value, label, activeType, pendingCount) {
+  const isActive = value === activeType;
+  return `
+    <button class="${isActive ? "active" : ""}" type="button" role="tab" aria-selected="${isActive ? "true" : "false"}" data-child-history-type="${value}" data-pending-count="${pendingCount}">
+      ${label}
+      ${pendingCount > 0 ? `<span class="child-history-type-badge">${pendingCount > 99 ? "99+" : pendingCount}</span>` : ""}
+    </button>
+  `;
+}
+
+function childHistoryFilterRow(activeFilter, activeType = "points") {
+  const isAllowance = activeType === "allowance";
   return `
     <div class="child-filter-row" aria-label="申請状態">
       ${childHistoryFilterButton("all", "すべて", activeFilter)}
-      ${childHistoryFilterButton("approved", "承認済み", activeFilter)}
       ${childHistoryFilterButton("pending", "確認中", activeFilter)}
-      ${childHistoryFilterButton("redo", "やり直し", activeFilter)}
+      ${
+        isAllowance
+          ? `
+            ${childHistoryFilterButton("completed", "支給済み", activeFilter)}
+            ${childHistoryFilterButton("rejected", "却下", activeFilter)}
+          `
+          : `
+            ${childHistoryFilterButton("approved", "承認済み", activeFilter)}
+            ${childHistoryFilterButton("redo", "やり直し", activeFilter)}
+          `
+      }
     </div>
   `;
 }
@@ -3432,6 +3584,29 @@ function filterChildHistoryApplications(applications, filter) {
   }
 
   return applications;
+}
+
+function filterChildHistoryRedemptions(redemptions, filter) {
+  if (filter === "pending") {
+    return redemptions.filter((redemption) => redemption.status === "pending");
+  }
+
+  if (filter === "completed") {
+    return redemptions.filter((redemption) => redemption.status === "completed");
+  }
+
+  if (filter === "rejected") {
+    return redemptions.filter((redemption) => redemption.status === "rejected");
+  }
+
+  return redemptions;
+}
+
+function normalizeChildHistoryFilter(filter, activeType) {
+  const allowedFilters = activeType === "allowance"
+    ? ["all", "pending", "completed", "rejected"]
+    : ["all", "pending", "approved", "redo"];
+  return allowedFilters.includes(filter) ? filter : "all";
 }
 
 function applicationCard(application) {
@@ -3467,8 +3642,54 @@ function applicationCard(application) {
   `;
 }
 
+function childHistoryRedemptionCard(redemption) {
+  const status = redemptionHistoryStatus(redemption.status);
+  return `
+    <div class="card application-card child-history-card">
+      <div class="child-history-content child-history-redemption-content">
+        <div class="child-activity-thumb child-activity-placeholder" aria-hidden="true">¥</div>
+        <div class="child-history-main">
+          <h2>おこづかい申請</h2>
+          <span class="child-history-date">${formatActivityTime(redemption.requestedAt)}</span>
+          <div class="child-activity-meta">
+            <span class="category-chip other">おこづかい</span>
+            <span class="status-pill ${redemption.status}">${redemptionStatusLabel(redemption.status)}</span>
+          </div>
+        </div>
+        <div class="child-history-side">
+          <strong class="child-history-points ${status.className}">
+            ${studyPayIcon(status.icon, "child-history-point-icon")}
+            <span>${redemption.points.toLocaleString()}pt</span>
+          </strong>
+          <span class="child-history-score">${redemption.points.toLocaleString()}円</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function redemptionHistoryStatus(status) {
+  if (status === "completed") {
+    return { className: "is-approved", icon: "circle-check" };
+  }
+
+  if (status === "pending") {
+    return { className: "is-pending", icon: "clock" };
+  }
+
+  return { className: "is-redo", icon: "circle-alert" };
+}
+
 function applicationScoreLabel(application) {
-  if (application.category !== "test" || application.score == null || application.score === "") {
+  if (application.category !== "test") {
+    return "";
+  }
+
+  if (application.testMethod === "rank") {
+    return application.rank == null || application.rank === "" ? "" : `${Number(application.rank).toLocaleString()}位`;
+  }
+
+  if (application.score == null || application.score === "") {
     return "";
   }
 
@@ -3591,33 +3812,53 @@ function pointHistoryCard(transaction) {
   `;
 }
 
-function notificationList(notifications) {
+function notificationList(notifications, context = {}) {
   const items = [...notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   return `
     <div class="application-list">
       ${
         items.length
-          ? items.map(notificationCard).join("")
-          : `<div class="card empty-state"><strong>通知はまだありません</strong><p>申請やおこづかいの動きがあるとここに表示されます。</p></div>`
+          ? items.map((notification) => notificationCard(notification, context)).join("")
+          : `<div class="notification-empty-state"><strong>お知らせはまだありません</strong></div>`
       }
     </div>
   `;
 }
 
-function notificationCard(notification) {
+function notificationCard(notification, context = {}) {
+  const source = parentNotificationSource(notification);
+  const isUnread = !notification.readAt;
+  const owner = context.owner || "parent";
+  const child = owner === "parent" && source === "child" ? getNotificationChild(notification) : null;
+  const shouldShowMessage = !(owner === "parent" && source === "child");
   return `
-    <div class="card application-card notification-card ${notification.readAt ? "" : "unread"}">
-      <div>
-        <span class="status-pill ${notification.readAt ? "approved" : "pending"}">${notification.readAt ? "既読" : "未読"}</span>
-        <h2>${escapeHtml(notification.title)}</h2>
-        <p>${escapeHtml(notification.message)}</p>
+    <div class="notification-card ${source === "child" ? "from-child" : "from-system"} ${isUnread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}" data-notification-owner="${escapeHtml(owner)}" ${notification.route ? `data-notification-route="${escapeHtml(notification.route)}"` : ""} ${context.childId ? `data-notification-child-id="${escapeHtml(context.childId)}"` : ""}>
+      <div class="notification-avatar" aria-hidden="true">
+        ${child ? childAvatar(child, "notification-child-avatar") : studyPayIcon(source === "child" ? "file-check" : "bell", "notification-avatar-icon")}
       </div>
-      <div class="application-meta">
-        <span>${formatDate(notification.createdAt)}</span>
+      <div class="notification-message-stack">
+        <div class="notification-bubble">
+          <div class="notification-title-row">
+            <h2>${escapeHtml(notification.title)}</h2>
+            <span class="notification-read-label ${isUnread ? "unread" : "read"}">${isUnread ? "未読" : "既読"}</span>
+          </div>
+          ${shouldShowMessage && notification.message ? `<p>${escapeHtml(notification.message)}</p>` : ""}
+        </div>
+        <div class="notification-time">${formatDate(notification.createdAt)}</div>
       </div>
-      ${notification.route ? `<button class="secondary-button compact-button" type="button" data-route="${escapeHtml(notification.route)}">確認する</button>` : ""}
     </div>
   `;
+}
+
+function getNotificationChild(notification) {
+  const parent = loadAccount() || state.parent;
+  const children = parent?.children || [];
+  const route = String(notification.route || "");
+  const routeId = route.split("/").pop();
+  return children.find((child) =>
+    (child.applications || []).some((application) => application.id === routeId)
+      || (child.redemptions || []).some((redemption) => redemption.id === routeId),
+  ) || children[0] || null;
 }
 
 function childHeader(label) {
@@ -3678,11 +3919,11 @@ function bottomNav(active) {
   const requestCount = getParentApplications().filter((item) => item.application.status === "pending").length;
   const redemptionCount = getParentRedemptions().filter((item) => item.redemption.status === "pending").length;
   const applicationCount = requestCount + redemptionCount;
-  const notificationCount = getUnreadNotifications(parent).length;
+  const notificationCount = getUnreadNotifications({ notifications: getParentAnnouncements(parent) }).length;
   const items = [
     ["home", studyPayIcon("house", "nav-lucide-icon"), "ホーム", "/parent", 0],
     ["requests", studyPayIcon("list-check", "nav-lucide-icon"), "申請一覧", "/parent/applications", applicationCount],
-    ["notifications", studyPayIcon("bell", "nav-lucide-icon"), "通知", "/parent/notifications", notificationCount],
+    ["notifications", studyPayIcon("bell", "nav-lucide-icon"), "お知らせ", "/parent/notifications", notificationCount],
     ["settings", studyPayIcon("settings", "nav-lucide-icon"), "設定", "/parent/settings", 0],
   ];
 
@@ -3884,6 +4125,7 @@ function bindAdminLogin() {
 
 function bindParentHome() {
   bindParentShell();
+  bindHomeExchangeUnitButtons();
   const trigger = document.querySelector("#parent-child-switch-trigger");
   const menu = document.querySelector("#parent-child-switch-menu");
 
@@ -3917,6 +4159,22 @@ function bindParentHome() {
 
     menu.hidden = true;
     trigger?.setAttribute("aria-expanded", "false");
+  });
+}
+
+function bindHomeExchangeUnitButtons() {
+  document.querySelectorAll("[data-exchange-unit-child-id] [data-redemption-unit]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const card = button.closest("[data-exchange-unit-child-id]");
+      const childId = card?.dataset.exchangeUnitChildId;
+      if (!childId) {
+        return;
+      }
+
+      updateChild(childId, { redemptionUnit: Number(button.dataset.redemptionUnit) });
+      render();
+    });
   });
 }
 
@@ -4081,13 +4339,7 @@ function bindParentDemoGuide() {
 
 function bindParentNotifications() {
   bindParentShell();
-  document.querySelectorAll("[data-parent-notification-source]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.parentNotificationSource = button.dataset.parentNotificationSource || "child";
-      state.parentNotificationReadFilter = "unread";
-      render();
-    });
-  });
+  bindNotificationCards();
   document.querySelectorAll("[data-parent-notification-read]").forEach((button) => {
     button.addEventListener("click", () => {
       state.parentNotificationReadFilter = button.dataset.parentNotificationRead || "unread";
@@ -4121,9 +4373,100 @@ function bindParentBilling() {
 
 function bindChildNotifications(child) {
   bindChildShell();
+  bindNotificationCards();
   document.querySelector("#read-child-notifications")?.addEventListener("click", () => {
     markChildNotificationsRead(child.id);
     render();
+  });
+}
+
+function bindNotificationCards() {
+  let longPressTimer = null;
+  let didLongPress = false;
+  document.querySelectorAll("[data-notification-id]").forEach((card) => {
+    const startLongPress = () => {
+      didLongPress = false;
+      clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        didLongPress = true;
+        showNotificationActionMenu(card);
+      }, 560);
+    };
+    const cancelLongPress = () => {
+      clearTimeout(longPressTimer);
+    };
+
+    card.addEventListener("pointerdown", startLongPress);
+    card.addEventListener("pointerup", cancelLongPress);
+    card.addEventListener("pointerleave", cancelLongPress);
+    card.addEventListener("pointercancel", cancelLongPress);
+    card.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      showNotificationActionMenu(card);
+    });
+    card.addEventListener("click", () => {
+      if (didLongPress) {
+        didLongPress = false;
+        return;
+      }
+
+      updateNotificationReadStateFromCard(card, true);
+      if (card.dataset.notificationOwner === "parent" && card.dataset.notificationRoute) {
+        navigate(card.dataset.notificationRoute);
+        return;
+      }
+
+      render();
+    });
+  });
+}
+
+function showNotificationActionMenu(card) {
+  const notificationId = card.dataset.notificationId;
+  const owner = card.dataset.notificationOwner || "parent";
+  const childId = card.dataset.notificationChildId || "";
+  document.querySelector("#notification-action-menu")?.remove();
+  const modal = document.createElement("div");
+  modal.className = "notification-action-backdrop";
+  modal.id = "notification-action-menu";
+  modal.innerHTML = `
+    <div class="notification-action-panel" role="menu" aria-label="お知らせの操作">
+      <button type="button" role="menuitem" data-notification-action="unread">未読にする</button>
+      <button class="danger" type="button" role="menuitem" data-notification-action="delete">削除</button>
+      <button type="button" role="menuitem" data-notification-action="cancel">キャンセル</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeMenu = () => modal.remove();
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal || event.target.dataset.notificationAction === "cancel") {
+      closeMenu();
+      return;
+    }
+
+    const action = event.target.dataset.notificationAction;
+    if (action === "unread") {
+      updateNotificationReadState({ owner, childId, notificationId, read: false });
+      closeMenu();
+      render();
+      return;
+    }
+
+    if (action === "delete") {
+      deleteNotification({ owner, childId, notificationId });
+      closeMenu();
+      render();
+    }
+  });
+}
+
+function updateNotificationReadStateFromCard(card, read) {
+  updateNotificationReadState({
+    owner: card.dataset.notificationOwner || "parent",
+    childId: card.dataset.notificationChildId || "",
+    notificationId: card.dataset.notificationId,
+    read,
   });
 }
 
@@ -4176,6 +4519,7 @@ function bindParentApplicationDetail(child, application) {
       category: String(formData.get("category") || application.category),
       subjectName: String(formData.get("subjectName") || "").trim() || "その他",
       score: Number(formData.get("score") || application.score || 0) || null,
+      rank: Number(formData.get("rank") || application.rank || 0) || null,
       gradeValue: String(formData.get("gradeValue") || application.gradeValue || "").trim(),
       otherContent: String(formData.get("otherContent") || application.otherContent || "").trim(),
       fixedPoints: Number(formData.get("fixedPoints") || 0),
@@ -4394,6 +4738,8 @@ function bindChildDetail(child) {
   document.querySelector("#delete-child-button")?.addEventListener("click", () => {
     showChildDeleteModal(child);
   });
+
+  bindRedemptionUnitButtons(child);
 }
 
 function maskedPassword() {
@@ -4636,12 +4982,7 @@ function bindSubjects(child) {
 
 function bindPointRules(child) {
   bindParentShell();
-  document.querySelectorAll("[data-redemption-unit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      updateChild(child.id, { redemptionUnit: Number(button.dataset.redemptionUnit) });
-      render();
-    });
-  });
+  bindRedemptionUnitButtons(child);
 
   const subjectTrigger = document.querySelector("#rule-subject-trigger");
   const subjectMenu = document.querySelector("#rule-subject-menu");
@@ -4765,6 +5106,142 @@ function bindPointRules(child) {
       updateChild(child.id, { ruleEditorMode: button.dataset.ruleMode });
       render();
     });
+  });
+
+  document.querySelector("[data-open-other-task-form]")?.addEventListener("click", () => {
+    updateChild(child.id, { ruleOtherTaskFormOpen: true, ruleOtherTaskEditingId: "" });
+    render();
+  });
+
+  document.querySelector("[data-close-other-task-form]")?.addEventListener("click", () => {
+    updateChild(child.id, { ruleOtherTaskFormOpen: false, ruleOtherTaskEditingId: "" });
+    render();
+  });
+
+  const otherFilterTrigger = document.querySelector("#rule-other-filter-trigger");
+  const otherFilterMenu = document.querySelector("#rule-other-filter-menu");
+  const closeOtherFilterMenu = () => {
+    if (otherFilterMenu) {
+      otherFilterMenu.hidden = true;
+    }
+    otherFilterTrigger?.setAttribute("aria-expanded", "false");
+  };
+  otherFilterTrigger?.addEventListener("click", () => {
+    if (!otherFilterMenu) {
+      return;
+    }
+
+    otherFilterMenu.hidden = !otherFilterMenu.hidden;
+    otherFilterTrigger.setAttribute("aria-expanded", String(!otherFilterMenu.hidden));
+  });
+
+  document.querySelectorAll("[data-rule-other-category-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      updateChild(child.id, { ruleOtherCategoryFilter: button.dataset.ruleOtherCategoryFilter || "all" });
+      render();
+    });
+  });
+
+  document.querySelector("[data-open-other-category-modal]")?.addEventListener("click", () => {
+    document.querySelector("#other-task-modal")?.classList.add("is-temporarily-hidden");
+    showOtherTaskCategoryModal(child);
+  });
+
+  const otherCategoryTrigger = document.querySelector("#other-task-category-trigger");
+  const otherCategoryMenu = document.querySelector("#other-task-category-menu");
+  const otherCategoryInput = document.querySelector("#other-task-category");
+  const closeOtherCategoryMenu = () => {
+    if (otherCategoryMenu) {
+      otherCategoryMenu.hidden = true;
+    }
+    otherCategoryTrigger?.setAttribute("aria-expanded", "false");
+  };
+  otherCategoryTrigger?.addEventListener("click", () => {
+    if (!otherCategoryMenu) {
+      return;
+    }
+
+    otherCategoryMenu.hidden = !otherCategoryMenu.hidden;
+    otherCategoryTrigger.setAttribute("aria-expanded", String(!otherCategoryMenu.hidden));
+  });
+
+  document.querySelectorAll("[data-other-task-category]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (otherCategoryInput) {
+        otherCategoryInput.value = button.dataset.otherTaskCategory || "その他";
+      }
+      const selectedTag = button.querySelector(".rule-other-category-select-tag")?.cloneNode(true);
+      if (selectedTag && otherCategoryTrigger) {
+        otherCategoryTrigger.querySelector(".rule-other-category-select-tag")?.replaceWith(selectedTag);
+      }
+      document.querySelectorAll("[data-other-task-category]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      closeOtherCategoryMenu();
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!otherCategoryMenu || otherCategoryMenu.hidden || event.target.closest(".rule-other-category-picker")) {
+      return;
+    }
+
+    closeOtherCategoryMenu();
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!otherFilterMenu || otherFilterMenu.hidden || event.target.closest(".rule-other-filter-picker")) {
+      return;
+    }
+
+    closeOtherFilterMenu();
+  });
+
+  document.querySelectorAll("[data-edit-other-task]").forEach((button) => {
+    button.addEventListener("click", () => {
+      updateChild(child.id, { ruleOtherTaskFormOpen: true, ruleOtherTaskEditingId: button.dataset.editOtherTask });
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-delete-other-task]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const task = getOtherPointTasks(child).find((item) => item.id === button.dataset.deleteOtherTask);
+      if (task) {
+        showOtherTaskDeleteModal(child, task);
+      }
+    });
+  });
+
+  document.querySelector("#other-task-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const error = form.querySelector("#other-task-error");
+    const formData = new FormData(form);
+    const taskId = String(formData.get("taskId") || "");
+    const category = String(formData.get("category") || "その他").trim() || "その他";
+    const taskName = String(formData.get("taskName") || "").trim();
+    const points = Number(formData.get("points") || 0);
+    if (!taskName) {
+      if (error) {
+        error.textContent = "タスク名を入力してください。";
+      }
+      return;
+    }
+
+    if (!Number.isFinite(points) || points < 1) {
+      if (error) {
+        error.textContent = "ポイントは1以上で入力してください。";
+      }
+      return;
+    }
+
+    if (taskId) {
+      updateOtherPointTask(child.id, taskId, { category, name: taskName, points });
+    } else {
+      addOtherPointTask(child.id, { category, name: taskName, points });
+    }
+    render();
   });
 
   document.querySelectorAll("[data-rule-test-method]").forEach((button) => {
@@ -4937,6 +5414,15 @@ function bindPointRules(child) {
       setPointRuleFormBaseline(event.currentTarget);
       render();
       showPointRuleSavedModal();
+    });
+  });
+}
+
+function bindRedemptionUnitButtons(child) {
+  document.querySelectorAll("[data-redemption-unit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      updateChild(child.id, { redemptionUnit: Number(button.dataset.redemptionUnit) });
+      render();
     });
   });
 }
@@ -5584,6 +6070,134 @@ function gradeRuleDynamicRowHtml(label = "", points = "") {
   `;
 }
 
+function showOtherTaskCategoryModal(child) {
+  document.querySelector("#other-task-category-modal")?.remove();
+  const colorPresets = getOtherTaskCategoryColorPresets();
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal rule-subject-modal";
+  modal.id = "other-task-category-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="other-task-category-modal-title">
+      <h2 id="other-task-category-modal-title">カテゴリー追加</h2>
+      <form class="form parent-switch-form" id="other-task-category-form">
+        <div class="field">
+          <label for="other-task-category-name-input">カテゴリー名</label>
+          <input id="other-task-category-name-input" name="categoryName" autocomplete="off" placeholder="例: 運動" required />
+        </div>
+        <div class="field">
+          <span class="field-label">背景色</span>
+          <div class="category-color-grid" data-category-color-group="background">
+            ${colorPresets.map((color, index) => `
+              <label class="category-color-swatch" style="background:${escapeHtml(color)};">
+                <input type="radio" name="backgroundColor" value="${escapeHtml(color)}" ${index === 0 ? "checked" : ""} />
+                <span></span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
+        <div class="error" id="other-task-category-error"></div>
+        <button class="primary-button" type="submit">追加する</button>
+        <button class="secondary-button" type="button" id="cancel-other-task-category">キャンセル</button>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  const closeModalAndRestoreTask = () => {
+    closeModal();
+    document.querySelector("#other-task-modal")?.classList.remove("is-temporarily-hidden");
+  };
+  document.querySelector("#cancel-other-task-category")?.addEventListener("click", closeModalAndRestoreTask);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModalAndRestoreTask();
+    }
+  });
+
+  const input = document.querySelector("#other-task-category-name-input");
+  input?.focus();
+
+  bindCategoryColorPalette(modal);
+
+  document.querySelector("#other-task-category-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const categoryName = String(formData.get("categoryName") || "").trim();
+    const backgroundColor = normalizeColorCode(String(formData.get("backgroundColor") || "#2ecb89"));
+    const textColor = "#ffffff";
+    const error = document.querySelector("#other-task-category-error");
+    const categories = getOtherTaskCategories(child);
+
+    if (!categoryName) {
+      error.textContent = "カテゴリー名を入力してください。";
+      return;
+    }
+
+    if (categories.some((category) => category.name === categoryName)) {
+      error.textContent = "同じ名前のカテゴリーがあります。";
+      return;
+    }
+
+    addOtherTaskCategory(child.id, { name: categoryName, backgroundColor, textColor });
+    closeModal();
+    render();
+  });
+}
+
+function showOtherTaskDeleteModal(child, task) {
+  document.querySelector("#other-task-delete-modal")?.remove();
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal child-delete-modal";
+  modal.id = "other-task-delete-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="other-task-delete-title">
+      <h2 id="other-task-delete-title">タスクを削除しますか？</h2>
+      <p class="fine-print">「${escapeHtml(task.name)}」を削除します。この操作は元に戻せません。</p>
+      <div class="confirm-actions">
+        <button class="danger-button child-delete-modal-confirm" type="button" id="confirm-other-task-delete">削除する</button>
+        <button class="secondary-button" type="button" id="cancel-other-task-delete">キャンセル</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  document.querySelector("#cancel-other-task-delete")?.addEventListener("click", closeModal);
+  document.querySelector("#confirm-other-task-delete")?.addEventListener("click", () => {
+    deleteOtherPointTask(child.id, task.id);
+    closeModal();
+    render();
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+}
+
+function bindCategoryColorPalette(modal) {
+  const syncCategoryNameInputColor = (color) => {
+    const nameInput = modal.querySelector("#other-task-category-name-input");
+    if (nameInput) {
+      nameInput.style.backgroundColor = color;
+    }
+  };
+  syncCategoryNameInputColor(modal.querySelector('input[name="backgroundColor"]:checked')?.value || "#2ecb89");
+
+  modal.querySelectorAll(".category-color-swatch input").forEach((input) => {
+    input.addEventListener("change", () => {
+      syncCategoryNameInputColor(input.value);
+    });
+  });
+}
+
+function normalizeColorCode(value) {
+  const trimmed = String(value || "").trim();
+  const withHash = trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
+  return /^#[0-9a-fA-F]{6}$/.test(withHash) ? withHash.toLowerCase() : "#f47b20";
+}
+
 function showRuleSubjectModal(child, subject = null) {
   document.querySelector("#rule-subject-modal")?.remove();
   const isEditing = Boolean(subject);
@@ -5844,10 +6458,13 @@ function bindChildApply(child, editingApplication = null) {
   const subjectSelect = document.querySelector("#application-subject");
   const fullScoreField = document.querySelector("#test-full-score-field");
   const fullScoreSelect = document.querySelector("#test-full-score");
+  const testMethodInput = document.querySelector("#test-method");
   const photoInput = document.querySelector("#application-photos");
   const photoHelp = document.querySelector("#photo-help");
   const scoreInput = document.querySelector("#test-score");
   const scoreError = document.querySelector("#test-score-error");
+  const rankInput = document.querySelector("#test-rank");
+  const rankError = document.querySelector("#test-rank-error");
   if (applicationForm) {
     applicationForm.noValidate = true;
   }
@@ -5857,6 +6474,62 @@ function bindChildApply(child, editingApplication = null) {
       scoreError.textContent = "";
     }
     scoreInput?.classList.remove("input-error");
+  };
+  const clearRankError = () => {
+    if (rankError) {
+      rankError.textContent = "";
+    }
+    rankInput?.classList.remove("input-error");
+  };
+  function getSelectedTestMethod() {
+    return testMethodInput?.value === "rank" ? "rank" : "score";
+  }
+  function syncPhotoHelp() {
+    if (!photoHelp) {
+      return;
+    }
+
+    if (categorySelect.value === "other") {
+      photoHelp.textContent = "その他は写真なしでも申請できます。写真がある場合は3枚まで追加できます。";
+      return;
+    }
+
+    if (categorySelect.value === "test" && getSelectedTestMethod() === "rank") {
+      photoHelp.textContent = "順位基準は写真なしでも申請できます。写真がある場合は3枚まで追加できます。";
+      return;
+    }
+
+    photoHelp.textContent = "テスト・成績は写真が必須です。1〜3枚まで追加できます。";
+  }
+  const syncTestMethodFields = () => {
+    const method = getSelectedTestMethod();
+    const currentScoreField = document.querySelector("#test-score")?.closest(".field");
+    const currentRankField = document.querySelector("#test-rank")?.closest(".field");
+    const currentPhotoField = document.querySelector("#application-photos")?.closest(".field");
+    const currentFullScoreField = document.querySelector("#test-full-score")?.closest(".field");
+    document.querySelectorAll("[data-child-test-method]").forEach((button) => {
+      const isActive = button.dataset.childTestMethod === method;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+    currentScoreField?.classList.toggle("hidden", method !== "score");
+    currentRankField?.classList.toggle("hidden", method !== "rank");
+    currentPhotoField?.classList.toggle("hidden", categorySelect.value === "test" && method === "rank");
+    if (currentFullScoreField) {
+      currentFullScoreField.classList.toggle("hidden", method === "rank" || Boolean(fullScoreSelect?.disabled));
+    }
+    if (method === "score") {
+      if (rankInput) {
+        rankInput.value = "";
+      }
+      clearRankError();
+    } else {
+      if (scoreInput) {
+        scoreInput.value = "";
+      }
+      clearScoreError();
+    }
+    syncPhotoHelp();
   };
   const syncGradeEvaluations = () => {
     const field = document.querySelector("#grade-evaluation-field");
@@ -5883,21 +6556,32 @@ function bindChildApply(child, editingApplication = null) {
       section.classList.toggle("hidden", section.dataset.applySection !== categorySelect.value);
     });
     syncTestFullScoreField();
+    syncTestMethodFields();
     photoInput.required = false;
-    if (photoHelp) {
-      photoHelp.textContent =
-        categorySelect.value === "other"
-          ? "その他は写真なしでも申請できます。写真がある場合は3枚まで追加できます。"
-          : "テスト・成績は写真が必須です。1〜3枚まで追加できます。";
-    }
+    syncPhotoHelp();
     syncGradeEvaluations();
   };
   categorySelect.addEventListener("change", syncSections);
   subjectSelect.addEventListener("change", () => {
     syncTestFullScoreField();
+    syncTestMethodFields();
     syncGradeEvaluations();
   });
+  applicationForm.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-child-test-method]");
+    if (!button || !applicationForm.contains(button)) {
+      return;
+    }
+
+    event.preventDefault();
+    if (testMethodInput) {
+      testMethodInput.value = button.dataset.childTestMethod || "score";
+    }
+    syncTestMethodFields();
+  });
   scoreInput?.addEventListener("input", clearScoreError);
+  rankInput?.addEventListener("input", clearRankError);
+  syncTestMethodFields();
   syncSections();
 
   applicationForm.addEventListener("submit", async (event) => {
@@ -5933,12 +6617,21 @@ function bindChildApply(child, editingApplication = null) {
       return;
     }
 
+    const testMethod = String(form.get("testMethod") || "score") === "rank" ? "rank" : "score";
     const scoreText = String(form.get("score") || "").trim();
-    if (category === "test" && scoreText && !/^[0-9]+$/.test(scoreText)) {
+    const rankText = String(form.get("rank") || "").trim();
+    if (category === "test" && testMethod === "score" && scoreText && !/^[0-9]+$/.test(scoreText)) {
       if (scoreError) {
         scoreError.textContent = "半角数字で入力してください";
       }
       scoreInput?.classList.add("input-error");
+      return;
+    }
+    if (category === "test" && testMethod === "rank" && rankText && !/^[0-9]+$/.test(rankText)) {
+      if (rankError) {
+        rankError.textContent = "半角数字で入力してください";
+      }
+      rankInput?.classList.add("input-error");
       return;
     }
 
@@ -5958,7 +6651,7 @@ function bindChildApply(child, editingApplication = null) {
       return;
     }
 
-    if (category !== "other" && totalPhotoCount < 1) {
+    if (category !== "other" && !(category === "test" && testMethod === "rank") && totalPhotoCount < 1) {
       error.textContent = "写真を追加してください";
       return;
     }
@@ -5970,8 +6663,10 @@ function bindChildApply(child, editingApplication = null) {
       existingApplication: editingApplication,
       category,
       subject,
+      testMethod,
       testFullScore: Number(form.get("testFullScore") || 100),
-      score: Number(scoreText || 0),
+      score: testMethod === "score" ? Number(scoreText || 0) : null,
+      rank: testMethod === "rank" ? Number(rankText || 0) : null,
       gradeType: category === "grade" ? "grade_5" : "",
       gradeEvaluationId: String(form.get("gradeEvaluationId") || ""),
       otherContent: String(form.get("otherContent") || "").trim(),
@@ -5991,12 +6686,6 @@ function bindChildApply(child, editingApplication = null) {
       applications: editingApplication
         ? (child.applications || []).map((item) => (item.id === editingApplication.id ? application : item))
         : [application, ...(child.applications || [])],
-    });
-    appendParentNotification({
-      type: editingApplication ? "application_updated" : "application_submitted",
-      title: editingApplication ? "申請が修正されました" : "新しい申請が届きました",
-      message: `${child.nickname}さんから${categoryLabel(application.category)}の申請が届いています。`,
-      route: `/parent/applications/${application.id}`,
     });
     await syncCurrentAccountToCloud();
 
@@ -6127,12 +6816,6 @@ function bindChildRedeem(child) {
     updateChildWithoutParentLogin(child.id, {
       redemptions: [redemption, ...(child.redemptions || [])],
     });
-    appendParentNotification({
-      type: "redemption_requested",
-      title: "おこづかい申請が届きました",
-      message: `${child.nickname}さんから${points.toLocaleString()}ptのおこづかい申請が届いています。`,
-      route: `/parent/redemptions/${redemption.id}`,
-    });
     await syncCurrentAccountToCloud();
     state.flash = `${points.toLocaleString()}ptのおこづかい申請を送りました。`;
     render();
@@ -6142,6 +6825,14 @@ function bindChildRedeem(child) {
 function bindChildHistory(child) {
   bindChildShell();
   bindPhotoViewer();
+  document.querySelectorAll("[data-child-history-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.childHistoryType = button.dataset.childHistoryType || "points";
+      state.childHistoryFilter = Number(button.dataset.pendingCount || 0) > 0 ? "pending" : "all";
+      render();
+      window.dispatchEvent(new CustomEvent("ince:child-rendered"));
+    });
+  });
   document.querySelectorAll("[data-child-history-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.childHistoryFilter = button.dataset.childHistoryFilter || "all";
@@ -6664,6 +7355,143 @@ function updateChild(childId, updates) {
   saveAccount(nextParent);
 }
 
+function getOtherPointTasks(child) {
+  return [...(child?.otherTasks || [])].sort(
+    (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
+  );
+}
+
+function getDefaultOtherTaskCategories() {
+  return [
+    { id: "other-category-help", name: "お手伝い", backgroundColor: "#fff7ed", textColor: "#f47b20" },
+    { id: "other-category-study", name: "学習", backgroundColor: "#eef8ff", textColor: "#3279c8" },
+    { id: "other-category-life", name: "生活", backgroundColor: "#f1f8ef", textColor: "#3f8f55" },
+    { id: "other-category-other", name: "その他", backgroundColor: "#f3eee9", textColor: "#5c3b22" },
+  ];
+}
+
+function getOtherTaskCategoryColorPresets() {
+  return ["#2ecb89", "#40bdc4", "#49aee9", "#9b887f", "#222222", "#ef3739", "#ec5a91", "#f97772", "#ffc02e", "#a77ed8"];
+}
+
+function getOtherTaskCategories(child) {
+  const defaults = getDefaultOtherTaskCategories();
+  const customCategories = child?.otherTaskCategories || [];
+  return [
+    ...defaults,
+    ...customCategories.filter((category) => !defaults.some((defaultCategory) => defaultCategory.name === category.name)),
+  ];
+}
+
+function getDefaultOtherTaskCategory(name) {
+  return getDefaultOtherTaskCategories().find((category) => category.name === name) || getDefaultOtherTaskCategories().at(-1);
+}
+
+function addOtherTaskCategory(childId, category) {
+  const parent = loadAccount();
+  const nextParent = {
+    ...parent,
+    children: (parent.children || []).map((child) => {
+      if (child.id !== childId) {
+        return child;
+      }
+
+      return {
+        ...child,
+        otherTaskCategories: [
+          ...(child.otherTaskCategories || []),
+          {
+            id: `other-category-${Date.now()}`,
+            name: category.name,
+            backgroundColor: category.backgroundColor,
+            textColor: category.textColor,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      };
+    }),
+  };
+  saveAccount(nextParent);
+}
+
+function addOtherPointTask(childId, task) {
+  const parent = loadAccount();
+  const nextParent = {
+    ...parent,
+    children: (parent.children || []).map((child) => {
+      if (child.id !== childId) {
+        return child;
+      }
+
+      return {
+        ...child,
+        otherTasks: [
+          ...(child.otherTasks || []),
+          {
+            id: `other-task-${Date.now()}`,
+            category: task.category || "その他",
+            name: task.name,
+            points: Number(task.points || 0),
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        ruleOtherTaskFormOpen: false,
+      };
+    }),
+  };
+  saveAccount(nextParent);
+}
+
+function updateOtherPointTask(childId, taskId, updates) {
+  const parent = loadAccount();
+  const nextParent = {
+    ...parent,
+    children: (parent.children || []).map((child) => {
+      if (child.id !== childId) {
+        return child;
+      }
+
+      return {
+        ...child,
+        otherTasks: (child.otherTasks || []).map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                category: updates.category || "その他",
+                name: updates.name,
+                points: Number(updates.points || 0),
+                updatedAt: new Date().toISOString(),
+              }
+            : task,
+        ),
+        ruleOtherTaskFormOpen: false,
+        ruleOtherTaskEditingId: "",
+      };
+    }),
+  };
+  saveAccount(nextParent);
+}
+
+function deleteOtherPointTask(childId, taskId) {
+  const parent = loadAccount();
+  const nextParent = {
+    ...parent,
+    children: (parent.children || []).map((child) => {
+      if (child.id !== childId) {
+        return child;
+      }
+
+      return {
+        ...child,
+        otherTasks: (child.otherTasks || []).filter((task) => task.id !== taskId),
+        ruleOtherTaskFormOpen: false,
+        ruleOtherTaskEditingId: "",
+      };
+    }),
+  };
+  saveAccount(nextParent);
+}
+
 function updateReviewedApplication(childId, applicationId, updates) {
   const parent = loadAccount();
   const nextParent = {
@@ -6683,6 +7511,7 @@ function updateReviewedApplication(childId, applicationId, updates) {
               category: updates.category,
               subjectName: updates.subjectName,
               score: updates.score,
+              rank: updates.rank,
               gradeEvaluationId: application.gradeEvaluationId || "",
               gradeValue: updates.gradeValue,
               otherContent: updates.otherContent,
@@ -7053,9 +7882,67 @@ function markParentNotificationsRead() {
     ...parent,
     notifications: (parent.notifications || []).map((notification) => ({
       ...notification,
-      readAt: notification.readAt || now,
+      readAt: parentNotificationSource(notification) === "system" ? notification.readAt || now : notification.readAt,
     })),
   });
+}
+
+function updateNotificationReadState({ owner, childId, notificationId, read }) {
+  const parent = loadAccount();
+  if (!parent || !notificationId) {
+    return;
+  }
+
+  const readAt = read ? new Date().toISOString() : null;
+  const updateNotification = (notification) =>
+    notification.id === notificationId
+      ? {
+          ...notification,
+          readAt,
+        }
+      : notification;
+  const nextParent = owner === "child"
+    ? {
+        ...parent,
+        children: (parent.children || []).map((child) =>
+          child.id === childId
+            ? {
+                ...child,
+                notifications: (child.notifications || []).map(updateNotification),
+              }
+            : child,
+        ),
+      }
+    : {
+        ...parent,
+        notifications: (parent.notifications || []).map(updateNotification),
+      };
+  saveAccount(nextParent);
+}
+
+function deleteNotification({ owner, childId, notificationId }) {
+  const parent = loadAccount();
+  if (!parent || !notificationId) {
+    return;
+  }
+
+  const nextParent = owner === "child"
+    ? {
+        ...parent,
+        children: (parent.children || []).map((child) =>
+          child.id === childId
+            ? {
+                ...child,
+                notifications: (child.notifications || []).filter((notification) => notification.id !== notificationId),
+              }
+            : child,
+        ),
+      }
+    : {
+        ...parent,
+        notifications: (parent.notifications || []).filter((notification) => notification.id !== notificationId),
+      };
+  saveAccount(nextParent);
 }
 
 function markChildNotificationsRead(childId) {
@@ -7130,21 +8017,18 @@ function createDemoData() {
   const now = new Date();
   const demoChild = createDemoChild(now);
   const otherChildren = (parent.children || []).filter((child) => child.loginId !== demoChild.loginId);
+  const existingNotifications = (parent.notifications || []).filter((notification) => !isDemoNotification(notification));
   const nextParent = {
     ...parent,
     children: [demoChild, ...otherChildren].slice(0, MAX_CHILDREN),
-    notifications: [
-      createNotification({
-        type: "demo_ready",
-        title: "デモデータを作成しました",
-        message: "親子の申請・承認・おこづかい申請をすぐ確認できます。",
-        route: "/parent",
-      }),
-      ...(parent.notifications || []),
-    ],
+    notifications: [...createDemoParentNotifications(now), ...existingNotifications],
   };
   saveAccount(nextParent);
   return nextParent;
+}
+
+function isDemoNotification(notification) {
+  return String(notification.type || "").startsWith("demo_");
 }
 
 function createDemoChild(now) {
@@ -7292,24 +8176,61 @@ function createDemoChild(now) {
         note: "算数の申請承認",
       },
     ],
-    notifications: [
-      createNotification({
-        type: "application_approved",
-        title: "申請が承認されました",
-        message: "算数が承認され、900ptが増えました。",
-        route: "/child/history",
-        createdAt: approvedAt,
-      }),
-      createNotification({
-        type: "redemption_completed",
-        title: "おこづかいが支給されました",
-        message: "500円のおこづかいが支給済みになりました。",
-        route: "/child/redeem",
-        createdAt: now.toISOString(),
-      }),
-    ],
+    notifications: createDemoChildNotifications(now, approvedAt),
     createdAt: getDateAfterDays(now, -7).toISOString(),
   };
+}
+
+function createDemoParentNotifications(now) {
+  const demoDate = (minutesAgo) => getDateAfterMinutes(now, -minutesAgo).toISOString();
+  const systemNotifications = [
+    ["demo_ready", "デモデータを作成しました", "親子の申請・承認・おこづかい申請をすぐ確認できます。", "/parent", 1, null],
+    ["demo_system_tip", "ポイント基準を確認できます", "科目ごとに点数基準や順位基準を設定できます。", "/parent/children/child-demo-mana/rules", 24, null],
+    ["demo_system_notice", "無料トライアル中です", "期間中は親子の画面を自由に確認できます。", "/parent/billing", 75, demoDate(55)],
+    ["demo_system_tip", "こどもログインを試せます", "デモこどもIDとパスワードでこども画面を確認できます。", "/parent/demo-guide", 150, demoDate(130)],
+    ["demo_system_notice", "お知らせの見え方を確認できます", "未読と既読の切り替えを試せます。", "/parent/notifications", 260, null],
+    ["demo_system_tip", "写真つき申請を確認できます", "申請詳細では、こどもが添付した写真を確認する想定です。", "/parent/applications", 440, demoDate(390)],
+    ["demo_system_notice", "おこづかい申請を確認できます", "ポイントを家庭内のおこづかい判断に使う流れを確認できます。", "/parent/applications", 720, null],
+    ["demo_system_tip", "親子で同じ履歴を見られます", "承認後のポイント履歴は親側とこども側で確認できます。", "/parent/children/child-demo-mana/points", 1500, demoDate(1450)],
+    ["demo_system_notice", "プロフィール写真を設定できます", "こども詳細画面からプロフィール写真を変更できます。", "/parent/children/child-demo-mana", 2200, demoDate(2100)],
+    ["demo_system_tip", "設定画面も確認できます", "クラウド同期やデモの使い方を設定から確認できます。", "/parent/settings", 3100, null],
+  ];
+
+  return systemNotifications
+    .map(([type, title, message, route, days, readAt]) => createNotification({
+      type,
+      title,
+      message,
+      route,
+      createdAt: demoDate(days),
+      readAt,
+    }))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+function createDemoChildNotifications(now, approvedAt) {
+  const demoDate = (minutesAgo) => getDateAfterMinutes(now, -minutesAgo).toISOString();
+  const rows = [
+    ["demo_child_application_approved", "申請が承認されました", "算数が承認され、900ptが増えました。", "/child/history", approvedAt, null],
+    ["demo_child_redemption_completed", "おこづかいが支給されました", "500円のおこづかいが支給済みになりました。", "/child/redeem", now.toISOString(), null],
+    ["demo_child_application_returned", "申請が戻されました", "国語の申請に、もう一度写真を追加してください。", "/child/history", demoDate(45), null],
+    ["demo_child_application_pending", "申請を確認中です", "英語の申請を保護者が確認しています。", "/child/history", demoDate(100), demoDate(80)],
+    ["demo_child_bonus_granted", "ボーナスが追加されました", "誕生月ボーナスとして300ptが増えました。", "/child/history", demoDate(180), demoDate(150)],
+    ["demo_child_redemption_pending", "おこづかい申請中です", "500ptのおこづかい申請を保護者が確認しています。", "/child/redeem", demoDate(280), null],
+    ["demo_child_application_approved", "申請が承認されました", "理科の申請が承認され、500ptが増えました。", "/child/history", demoDate(480), demoDate(430)],
+    ["demo_child_system_tip", "写真を追加できます", "テストや成績の申請には写真を追加してください。", "/child/apply", demoDate(900), null],
+    ["demo_child_system_tip", "ポイント履歴を確認できます", "何でポイントが増えたか履歴から確認できます。", "/child/history", demoDate(1500), demoDate(1400)],
+    ["demo_child_system_notice", "デモこどもでログイン中です", "申請、履歴、おこづかい申請の流れを確認できます。", "/child", demoDate(2400), null],
+  ];
+
+  return rows.map(([type, title, message, route, createdAt, readAt]) => createNotification({
+    type,
+    title,
+    message,
+    route,
+    createdAt,
+    readAt,
+  }));
 }
 
 function createDemoPointRules() {
@@ -7508,7 +8429,7 @@ function updateSubjectPointRuleEnabled(childId, subjectId, ruleType, enabled) {
   saveAccount(nextParent);
 }
 
-function createNotification({ type, title, message, route = "", createdAt = new Date().toISOString() }) {
+function createNotification({ type, title, message, route = "", createdAt = new Date().toISOString(), readAt = null }) {
   return {
     id: `notification-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     type,
@@ -7516,7 +8437,7 @@ function createNotification({ type, title, message, route = "", createdAt = new 
     message,
     route,
     createdAt,
-    readAt: null,
+    readAt,
   };
 }
 
@@ -7667,8 +8588,10 @@ function createApplication(child, values) {
     status: existingApplication?.status || "pending",
     subjectId: values.subject?.id || "",
     subjectName: values.subject?.name || "",
+    testMethod: values.category === "test" ? values.testMethod || "score" : "",
     testFullScore: values.category === "test" ? values.testFullScore : null,
-    score: values.category === "test" ? values.score : null,
+    score: values.category === "test" && (values.testMethod || "score") === "score" ? values.score : null,
+    rank: values.category === "test" && values.testMethod === "rank" ? values.rank : null,
     gradeType: values.category === "grade" ? values.gradeType : "",
     gradeEvaluationId: values.category === "grade" ? values.gradeEvaluationId : "",
     gradeValue: values.category === "grade" ? gradeEvaluation?.label || "" : "",
@@ -7805,6 +8728,13 @@ function showPhotoModal(src, name) {
 
 function validateApplication(application) {
   if (application.category === "test") {
+    if (application.testMethod === "rank") {
+      if (!application.rank || application.rank < 1) {
+        return "順位を入力してください。";
+      }
+      return "";
+    }
+
     if (!application.score || application.score < 1) {
       return "点数を入力してください。";
     }
@@ -7832,7 +8762,9 @@ function calculateSuggestedPoints(child, values) {
 
   const ruleType =
     values.category === "test"
-      ? values.testFullScore === 50
+      ? values.testMethod === "rank"
+        ? "test_rank"
+        : values.testFullScore === 50
         ? "test_50"
         : "test_100"
       : values.gradeType;
@@ -7843,6 +8775,24 @@ function calculateSuggestedPoints(child, values) {
   }
 
   if (values.category === "test") {
+    if (values.testMethod === "rank") {
+      const rank = Number(values.rank || 0);
+      const normalizedRule = normalizeRankRule(rule);
+      for (const setting of normalizedRule.settings) {
+        const threshold = Number(setting.condition.match(/\d+/)?.[0] || 0);
+        if (setting.condition.includes("未満") && rank > threshold) {
+          return setting.points;
+        }
+        if (setting.condition.includes("以内") && rank <= threshold) {
+          return setting.points;
+        }
+        if (!setting.condition.includes("以内") && !setting.condition.includes("未満") && rank === threshold) {
+          return setting.points;
+        }
+      }
+      return 0;
+    }
+
     const score = Number(values.score || 0);
     const normalizedRule = normalizeTestRule(rule, values.testFullScore === 50 ? 50 : 100);
     for (const setting of normalizedRule.settings) {
@@ -8379,6 +9329,12 @@ function getDateAfterDays(date, days) {
   return nextDate;
 }
 
+function getDateAfterMinutes(date, minutes) {
+  const nextDate = new Date(date);
+  nextDate.setMinutes(nextDate.getMinutes() + minutes);
+  return nextDate;
+}
+
 function getNextBillingDate(plan, date) {
   const nextDate = new Date(date);
   if (plan === "yearly") {
@@ -8444,6 +9400,10 @@ function cloudSyncStatusLabel() {
 
 function applicationSummary(application) {
   if (application.category === "test") {
+    if (application.testMethod === "rank") {
+      return `${Number(application.rank || 0).toLocaleString()}位`;
+    }
+
     return `${application.testFullScore}点満点中 ${application.score}点`;
   }
 
