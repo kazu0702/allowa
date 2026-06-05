@@ -865,7 +865,7 @@ function topbar() {
   return `
     <div class="topbar">
       <div class="brand" aria-label="allowa">
-        <img class="header-logo-image lp-header-logo-image" src="./logo.svg?v=phase291" alt="allowa" />
+        <img class="header-logo-image lp-header-logo-image" src="./logo.svg?v=phase318" alt="allowa" />
       </div>
       <button class="text-button" type="button" data-route="/login">ログイン</button>
     </div>
@@ -878,72 +878,149 @@ function lpView() {
       ${topbar()}
 
       <div class="hero">
-        <h1>がんばった証をおこづかいに</h1>
+        <h1>がんばったをおこづかいに</h1>
       </div>
       <div class="hero-copy">
-        <p>テストや学習成果をこどもが自分で申請し、保護者が確認してポイント付与。がんばりが数字で増えるから、次も挑戦したくなります。</p>
+        <span class="lp-section-kicker">about</span>
+        <span class="hero-eyebrow">allowa（アロワ）とは</span>
+        <div class="hero-copy-card">
+          <h2>親子でたのしく取り組む<br />おこづかいの仕組み化サービスです</h2>
+          <p>毎月定額で支給するおこづかい。こどもたちはそれを当たり前だと思ったり、少ないと不満をもらすことも、、、<br />allowaならテストや成績・お手伝いなど、こどもの「がんばり」に応じてポイントを付与できます。<br />貯まったポイントを家庭内でおこづかいやスマホやゲームの時間と交換。<br />がんばりがポイントとして数字で増えるから次も挑戦したくなります。</p>
+        </div>
         <div class="hero-actions">
           <button class="primary-button" type="button" data-route="/signup">14日間無料で始める</button>
-          <button class="secondary-button" type="button" data-route="/login">ログイン</button>
-          <button class="secondary-button" type="button" data-route="/child/login">こどもログイン</button>
-        </div>
-      </div>
-
-      <div class="feature-strip" aria-label="使い方">
-        <div class="mini-card">
-          <span class="icon-dot">1</span>
-          <div><strong>こどもが申請</strong><span>テスト、成績、その他のがんばりを写真つきで送ります。</span></div>
-        </div>
-        <div class="mini-card">
-          <span class="icon-dot">2</span>
-          <div><strong>親が確認</strong><span>写真と内容を見て、承認・やり直し・却下を選べます。</span></div>
-        </div>
-        <div class="mini-card">
-          <span class="icon-dot">3</span>
-          <div><strong>ポイント付与</strong><span>承認された成果がポイントになり、残高として見えるようになります。</span></div>
         </div>
       </div>
 
       <section class="section motivation-section">
-        <h2>こどものやる気が続きやすい理由</h2>
+        <span class="lp-section-kicker">reason</span>
+        <h2>こどものやる気が<br />続きやすい理由</h2>
         <div class="motivation-list">
           <div class="motivation-item">
-            <span class="motivation-icon">↑</span>
             <div>
-              <strong>がんばりがすぐ見える</strong>
-              <p>承認されるとポイントが増えるので、努力がその場で実感できます。</p>
-            </div>
-          </div>
-          <div class="motivation-item">
-            <span class="motivation-icon">✓</span>
-            <div>
-              <strong>親に見てもらえる</strong>
+              <strong><span class="motivation-number">1</span><span>見てもらえる</span></strong>
+              <span class="motivation-subtitle">show</span>
               <p>写真つきで申請するから、点数だけでなく取り組みそのものを伝えられます。</p>
+              <img class="motivation-image" src="./apply.png?v=phase318" alt="" loading="lazy" />
             </div>
           </div>
           <div class="motivation-item">
-            <span class="motivation-icon">pt</span>
             <div>
-              <strong>おこづかいに納得感が出る</strong>
+              <strong><span class="motivation-number">2</span><span>認めてもらえる</span></strong>
+              <span class="motivation-subtitle">approval</span>
+              <p>承認されるとポイントが増えるので、努力がその場で実感できます。</p>
+              <img class="motivation-image" src="./approve.png?v=phase318" alt="" loading="lazy" />
+            </div>
+          </div>
+          <div class="motivation-item">
+            <div>
+              <strong><span class="motivation-number">3</span><span>がんばりが見える</span></strong>
+              <span class="motivation-subtitle">visualization</span>
               <p>何をがんばったからポイントになったのか、親子で同じ履歴を見られます。</p>
+              <img class="motivation-image" src="./reward.png?v=phase318" alt="" loading="lazy" />
             </div>
           </div>
         </div>
       </section>
 
-      <section class="section">
-        <h2>親子で続けやすい学習の記録</h2>
-        <p>スマホだけで使えるシンプルな画面構成。入力は短く、確認は写真中心にして、毎日の利用に負担が出ない形を目指します。</p>
+      <section class="section feature-strip">
+        <span class="lp-section-kicker">How to use</span>
+        <h2>使い方</h2>
+        <div class="feature-list">
+          <div class="mini-card">
+            <span class="feature-number">1</span>
+            <div>
+              <strong>ポイント付与の基準を設定</strong>
+              <p>テストや成績、お手伝いなど、家庭ごとの基準を決めます。</p>
+            </div>
+          </div>
+          <div class="mini-card">
+            <span class="feature-number">2</span>
+            <div>
+              <strong>こどもが申請</strong>
+              <p>がんばった内容を、写真やメモと一緒に送ります。</p>
+            </div>
+          </div>
+          <div class="mini-card">
+            <span class="feature-number">3</span>
+            <div>
+              <strong>親が確認</strong>
+              <p>申請内容を見て、承認・やり直し・却下を選びます。</p>
+            </div>
+          </div>
+          <div class="mini-card">
+            <span class="feature-number">4</span>
+            <div>
+              <strong>ポイント付与</strong>
+              <p>承認された内容に応じて、家庭内ポイントが増えます。</p>
+            </div>
+          </div>
+          <div class="mini-card">
+            <span class="feature-number">5</span>
+            <div>
+              <strong>おこづかい申請</strong>
+              <p>貯まったポイントを使って、こどもから申請できます。</p>
+            </div>
+          </div>
+          <div class="mini-card">
+            <span class="feature-number">6</span>
+            <div>
+              <strong>おこづかい支給</strong>
+              <p>親が確認して、家庭内のおこづかいとして支給します。</p>
+            </div>
+          </div>
+        </div>
       </section>
 
-      <section class="section">
+      <section class="section price-section">
+        <span class="lp-section-kicker">price</span>
         <h2>料金</h2>
         <div class="card price-box">
           <span class="summary-kicker">14日間無料トライアル</span>
-          <div class="price"><strong>500円</strong><span>/ 月</span></div>
-          <p>年払いは5,000円。MVPではまず無料トライアル状態で体験を確認します。</p>
+          <div class="lp-price-options">
+            <div class="lp-price-option">
+              <span>月払い</span>
+              <div class="price"><strong>500円</strong><span>/ 月</span></div>
+            </div>
+            <div class="lp-price-option">
+              <span>年払い</span>
+              <div class="price"><strong>5,000円</strong><span>/ 年</span></div>
+            </div>
+          </div>
         </div>
       </section>
+
+      <section class="section faq-section">
+        <span class="lp-section-kicker">FAQ</span>
+        <h2>よくある質問</h2>
+        <div class="faq-list">
+          <div class="faq-item">
+            <h3>ポイントは何に使えますか？</h3>
+            <p>家庭内のおこづかいや、スマホ・ゲーム時間などのごほうびルールに使えます。</p>
+          </div>
+          <div class="faq-item">
+            <h3>こどもは自分でポイントを増やせますか？</h3>
+            <p>いいえ。こどもの申請を保護者が確認し、承認した内容だけポイントになります。</p>
+          </div>
+          <div class="faq-item">
+            <h3>スマホだけで使えますか？</h3>
+            <p>はい。親もこどもも、スマホで申請・確認しやすい画面を前提にしています。</p>
+          </div>
+          <div class="faq-item">
+            <h3>無料で試せますか？</h3>
+            <p>14日間無料でお試しいただけます。家庭に合うか確認してから続けられます。</p>
+          </div>
+        </div>
+      </section>
+
+      <footer class="lp-footer">
+        <div class="lp-footer-brand">
+          <img class="lp-footer-icon" src="./icon.svg?v=phase318" alt="" />
+          <img class="lp-footer-logo" src="./logo.svg?v=phase318" alt="allowa" />
+        </div>
+        <p>がんばったをおこづかいに</p>
+        <small>&copy; 2026 allowa</small>
+      </footer>
     </section>
   `;
 }
@@ -1088,7 +1165,7 @@ function parentHomeView() {
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
-          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase291" alt="allowa" />
+          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase318" alt="allowa" />
         </div>
         <div class="parent-header-switch">
           <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -3475,7 +3552,7 @@ function childHeader(label) {
   return `
     <div class="topbar child-topbar">
       <div class="brand">
-        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase291" alt="allowa" />
+        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase318" alt="allowa" />
       </div>
       <div class="child-profile-pill">
         <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">

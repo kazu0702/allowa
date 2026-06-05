@@ -21,6 +21,9 @@ await Promise.all([
   copyFile(join(root, "app", "icon.svg"), join(dist, "icon.svg")),
   copyFile(join(root, "app", "logo.svg"), join(dist, "logo.svg")),
   copyFile(join(root, "app", "image.jpg"), join(dist, "image.jpg")),
+  copyFile(join(root, "app", "reward.png"), join(dist, "reward.png")),
+  copyFile(join(root, "app", "apply.png"), join(dist, "apply.png")),
+  copyFile(join(root, "app", "approve.png"), join(dist, "approve.png")),
 ]);
 
 async function loadLocalEnv() {
