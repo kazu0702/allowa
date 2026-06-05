@@ -42,7 +42,10 @@ const state = {
   parent: loadSessionParent(),
   flash: "",
   monthlyBonusChildId: "",
+  parentApplicationsType: "points",
   parentApplicationsFilter: "all",
+  parentNotificationSource: "child",
+  parentNotificationReadFilter: "unread",
   childHistoryFilter: "all",
 };
 const cloudState = {
@@ -346,6 +349,22 @@ function navigate(path) {
     return;
   }
 
+  if (path === "/parent/applications") {
+    const wasPointApplications = state.parentApplicationsType === "points";
+    state.parentApplicationsType = "points";
+    if (!wasPointApplications) {
+      state.parentApplicationsFilter = "all";
+    }
+  }
+
+  if (path === "/parent/redemptions") {
+    const wasAllowanceApplications = state.parentApplicationsType === "allowance";
+    state.parentApplicationsType = "allowance";
+    if (!wasAllowanceApplications) {
+      state.parentApplicationsFilter = "all";
+    }
+  }
+
   location.hash = path;
 }
 
@@ -639,8 +658,9 @@ function renderParentRoute(app, route) {
   }
 
   if (route === "/parent/redemptions") {
-    app.innerHTML = parentRedemptionsView();
-    bindParentRedemptions();
+    state.parentApplicationsType = "allowance";
+    app.innerHTML = parentApplicationsView();
+    bindParentApplications();
     return;
   }
 
@@ -764,12 +784,6 @@ function renderParentRoute(app, route) {
     return;
   }
 
-  if (route === "/parent/children") {
-    app.innerHTML = childrenView();
-    bindChildren();
-    return;
-  }
-
   app.innerHTML = parentHomeView();
   bindParentHome();
 }
@@ -865,7 +879,7 @@ function topbar() {
   return `
     <div class="topbar">
       <div class="brand" aria-label="allowa">
-        <img class="header-logo-image lp-header-logo-image" src="./logo.svg?v=phase318" alt="allowa" />
+        <img class="header-logo-image lp-header-logo-image" src="./logo.svg?v=phase322" alt="allowa" />
       </div>
       <button class="text-button" type="button" data-route="/login">ログイン</button>
     </div>
@@ -901,7 +915,7 @@ function lpView() {
               <strong><span class="motivation-number">1</span><span>見てもらえる</span></strong>
               <span class="motivation-subtitle">show</span>
               <p>写真つきで申請するから、点数だけでなく取り組みそのものを伝えられます。</p>
-              <img class="motivation-image" src="./apply.png?v=phase318" alt="" loading="lazy" />
+              <img class="motivation-image" src="./apply.png?v=phase322" alt="" loading="lazy" />
             </div>
           </div>
           <div class="motivation-item">
@@ -909,7 +923,7 @@ function lpView() {
               <strong><span class="motivation-number">2</span><span>認めてもらえる</span></strong>
               <span class="motivation-subtitle">approval</span>
               <p>承認されるとポイントが増えるので、努力がその場で実感できます。</p>
-              <img class="motivation-image" src="./approve.png?v=phase318" alt="" loading="lazy" />
+              <img class="motivation-image" src="./approve.png?v=phase322" alt="" loading="lazy" />
             </div>
           </div>
           <div class="motivation-item">
@@ -917,7 +931,7 @@ function lpView() {
               <strong><span class="motivation-number">3</span><span>がんばりが見える</span></strong>
               <span class="motivation-subtitle">visualization</span>
               <p>何をがんばったからポイントになったのか、親子で同じ履歴を見られます。</p>
-              <img class="motivation-image" src="./reward.png?v=phase318" alt="" loading="lazy" />
+              <img class="motivation-image" src="./reward.png?v=phase322" alt="" loading="lazy" />
             </div>
           </div>
         </div>
@@ -1015,8 +1029,8 @@ function lpView() {
 
       <footer class="lp-footer">
         <div class="lp-footer-brand">
-          <img class="lp-footer-icon" src="./icon.svg?v=phase318" alt="" />
-          <img class="lp-footer-logo" src="./logo.svg?v=phase318" alt="allowa" />
+          <img class="lp-footer-icon" src="./icon.svg?v=phase322" alt="" />
+          <img class="lp-footer-logo" src="./logo.svg?v=phase322" alt="allowa" />
         </div>
         <p>がんばったをおこづかいに</p>
         <small>&copy; 2026 allowa</small>
@@ -1165,7 +1179,7 @@ function parentHomeView() {
     <section class="screen home-screen">
       <div class="topbar parent-home-topbar">
         <div class="brand">
-          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase318" alt="allowa" />
+          <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase322" alt="allowa" />
         </div>
         <div class="parent-header-switch">
           <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -1238,7 +1252,6 @@ function parentHomeChildrenStatus(children) {
   if (!children.length) {
     return `
       <section class="parent-child-status-section">
-        <div class="section-label">こどもの状況</div>
         <div class="card parent-child-status-empty">
           ${studyPayIcon("circle-user-round", "parent-child-status-empty-icon")}
           <strong>まずはお子さまを追加してください</strong>
@@ -1251,7 +1264,6 @@ function parentHomeChildrenStatus(children) {
   const canAdd = children.length < MAX_CHILDREN;
   return `
     <section class="parent-child-status-section">
-      <div class="section-label">こどもの状況</div>
       <div class="parent-child-status-list">
         ${children.map(parentHomeChildStatusCard).join("")}
       </div>
@@ -1278,48 +1290,31 @@ function childAvatar(child, className = "") {
 }
 
 function parentHomeChildStatusCard(child) {
-  const pendingApplications = getChildApplications(child).filter((application) => application.status === "pending").length;
-  const pendingRedemptions = getChildRedemptions(child).filter((redemption) => redemption.status === "pending").length;
   const monthlyEarnedPoints = getMonthlyEarnedPoints(child);
   const monthlyAllowance = getMonthlyReceivedAllowanceTotal(child);
 
   return `
     <button class="card parent-child-status-card" type="button" data-route="/parent/children/${child.id}">
       <span class="parent-child-status-main">
-        <span class="parent-child-status-head">
-          <span class="parent-child-status-name">
+        <span class="parent-child-status-overview">
+          <span class="parent-child-status-profile">
             ${childAvatar(child, "parent-child-status-avatar")}
             <strong>${escapeHtml(child.nickname)}</strong>
           </span>
-          <span class="parent-child-status-detail">詳細を確認</span>
-        </span>
-        <span class="parent-child-total-points">
-          <span>総保有ポイント</span>
-          <strong>${getAvailablePoints(child).toLocaleString()}pt</strong>
-        </span>
-        <span class="parent-child-status-groups">
-          <span class="parent-child-status-group">
-            <span class="parent-child-status-group-title">今月</span>
-            <span class="parent-child-status-row">
-              <span>ポイント</span>
-              <strong>${parentChildStatusValue(monthlyEarnedPoints, "pt")}</strong>
-            </span>
-            <span class="parent-child-status-row">
-              <span>おこづかい</span>
-              <strong>${parentChildStatusValue(monthlyAllowance, "円")}</strong>
-            </span>
+          <span class="parent-child-total-points">
+            <span>ポイント残高</span>
+            <strong>${getAvailablePoints(child).toLocaleString()}<span class="parent-child-total-unit">pt</span></strong>
           </span>
-          <span class="parent-child-status-group">
-            <span class="parent-child-status-group-title">申請</span>
-            <span class="parent-child-status-row">
-              <span>やった！</span>
-              <strong>${parentChildStatusValue(pendingApplications, "件")}</strong>
-            </span>
-            <span class="parent-child-status-row">
-              <span>おこづかい</span>
-              <strong>${parentChildStatusValue(pendingRedemptions, "件")}</strong>
-            </span>
+          <span class="parent-child-detail-button">詳細</span>
+        </span>
+        <span class="parent-child-status-table" aria-label="${escapeHtml(child.nickname)}の今月分">
+          <span class="parent-child-status-heading">
+            <span>今月分</span>
           </span>
+          <span class="parent-child-status-cell parent-child-status-label">ポイント</span>
+          <span class="parent-child-status-cell parent-child-status-label">おこづかい</span>
+          <strong class="parent-child-status-cell parent-child-status-value">${parentChildStatusValue(monthlyEarnedPoints, "pt")}</strong>
+          <strong class="parent-child-status-cell parent-child-status-value">${parentChildStatusValue(monthlyAllowance, "円")}</strong>
         </span>
       </span>
     </button>
@@ -1332,20 +1327,98 @@ function parentChildStatusValue(value, unit) {
 
 function parentNotificationsView() {
   const parent = loadAccount() || state.parent || initialParent;
+  const sourceFilter = state.parentNotificationSource || "child";
+  const readFilter = state.parentNotificationReadFilter || "unread";
+  const notifications = parent.notifications || [];
+  const sourceFilteredNotifications = filterParentNotificationsBySource(notifications, sourceFilter);
+  const visibleNotifications = filterNotificationsByReadState(sourceFilteredNotifications, readFilter);
   return `
     <section class="screen home-screen">
       ${parentPlainHeader("通知")}
-      <div class="page-heading settings-page-heading">
-        <p>未読 ${getUnreadNotifications(parent).length} 件</p>
+      ${parentNotificationSourceTabs(sourceFilter, notifications)}
+
+      <div class="parent-notification-list-head">
+        ${parentNotificationReadTabs(readFilter)}
       </div>
 
-      ${notificationList(parent.notifications || [])}
+      ${notificationList(visibleNotifications)}
 
       ${parent.notifications?.length ? `<button class="secondary-button" type="button" id="read-parent-notifications">すべて既読にする</button>` : ""}
 
       ${bottomNav("notifications")}
     </section>
   `;
+}
+
+function parentNotificationSourceTabs(activeSource, notifications = []) {
+  const childUnreadCount = filterNotificationsByReadState(filterParentNotificationsBySource(notifications, "child"), "unread").length;
+  const systemUnreadCount = filterNotificationsByReadState(filterParentNotificationsBySource(notifications, "system"), "unread").length;
+  return `
+    <div class="parent-notification-source-tabs" role="tablist" aria-label="通知元">
+      ${parentNotificationSourceTab("child", "こどもから", activeSource, childUnreadCount)}
+      ${parentNotificationSourceTab("system", "システム／運営から", activeSource, systemUnreadCount)}
+    </div>
+  `;
+}
+
+function parentNotificationSourceTab(value, label, activeSource, unreadCount) {
+  const isActive = value === activeSource;
+  return `
+    <button class="${isActive ? "active" : ""}" type="button" role="tab" aria-selected="${isActive ? "true" : "false"}" data-parent-notification-source="${value}">
+      ${label}
+      ${unreadCount > 0 ? `<span class="parent-notification-source-badge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}
+    </button>
+  `;
+}
+
+function parentNotificationReadTabs(activeFilter) {
+  return `
+    <div class="parent-notification-read-tabs" role="tablist" aria-label="通知の表示">
+      ${parentNotificationReadTab("unread", "未読", activeFilter)}
+      ${parentNotificationReadTab("read", "既読", activeFilter)}
+    </div>
+  `;
+}
+
+function parentNotificationReadTab(value, label, activeFilter) {
+  const isActive = value === activeFilter;
+  return `
+    <button class="${isActive ? "active" : ""}" type="button" role="tab" aria-selected="${isActive ? "true" : "false"}" data-parent-notification-read="${value}">
+      ${label}
+    </button>
+  `;
+}
+
+function filterParentNotificationsBySource(notifications, source) {
+  return notifications.filter((notification) => {
+    const isChildSource = parentNotificationSource(notification) === "child";
+    return source === "child" ? isChildSource : !isChildSource;
+  });
+}
+
+function parentNotificationSource(notification) {
+  const type = notification.type || "";
+  const childSourceTypes = new Set([
+    "application_submitted",
+    "application_updated",
+    "application_reapplied",
+    "redemption_requested",
+  ]);
+
+  if (childSourceTypes.has(type)) {
+    return "child";
+  }
+
+  const route = String(notification.route || "");
+  if (route.startsWith("/parent/applications") || route.startsWith("/parent/redemptions")) {
+    return "child";
+  }
+
+  return "system";
+}
+
+function filterNotificationsByReadState(notifications, readFilter) {
+  return notifications.filter((notification) => (readFilter === "read" ? Boolean(notification.readAt) : !notification.readAt));
 }
 
 function parentSettingsView() {
@@ -1355,7 +1428,6 @@ function parentSettingsView() {
 
       <div class="settings-menu">
         ${settingsMenuButton("ボーナス設定", "/parent/monthly-bonus")}
-        ${settingsMenuButton("こども管理", "/parent/children")}
         ${settingsMenuButton("プラン・支払い設定", "/parent/billing")}
         ${settingsMenuButton("メールアドレス設定", "/parent/settings/email")}
         ${settingsMenuButton("パスワード変更", "/parent/settings/password")}
@@ -1626,14 +1698,18 @@ function billingPlanCard(plan, subscription) {
 }
 
 function parentApplicationsView() {
-  const items = getParentApplications();
-  const pendingItems = items.filter((item) => item.application.status === "pending");
-  const activeFilter = state.parentApplicationsFilter || "all";
-  const filteredItems = filterParentApplications(items, activeFilter);
+  const activeType = state.parentApplicationsType || "points";
+  const isAllowance = activeType === "allowance";
+  const items = isAllowance ? getParentRedemptions() : getParentApplications();
+  const pendingItems = items.filter((item) => (isAllowance ? item.redemption.status : item.application.status) === "pending");
+  const activeFilter = normalizeParentApplicationFilter(state.parentApplicationsFilter || "all", activeType);
+  state.parentApplicationsFilter = activeFilter;
+  const filteredItems = isAllowance ? filterParentRedemptions(items, activeFilter) : filterParentApplications(items, activeFilter);
   return `
     <section class="screen home-screen">
       ${parentPlainHeader("申請一覧")}
-      ${parentApplicationFilterRow(activeFilter)}
+      ${parentApplicationTypeTabs(activeType)}
+      ${parentApplicationFilterRow(activeFilter, activeType)}
       <div class="page-heading settings-page-heading">
         <p>確認待ち ${pendingItems.length} 件</p>
       </div>
@@ -1641,10 +1717,10 @@ function parentApplicationsView() {
       <div class="application-list">
         ${
           items.length === 0
-            ? `<div class="card empty-state"><strong>申請はまだありません</strong><p>こどもから申請されるとここに表示されます。</p></div>`
+            ? `<div class="card empty-state"><strong>${isAllowance ? "おこづかい申請" : "ポイント申請"}はまだありません</strong><p>こどもから申請されるとここに表示されます。</p></div>`
             : filteredItems.length === 0
               ? `<div class="card empty-state"><strong>表示できる申請はありません</strong><p>ほかのタグに切り替えて確認できます。</p></div>`
-              : filteredItems.map(({ child, application }) => parentApplicationCard(child, application)).join("")
+              : filteredItems.map((item) => (isAllowance ? parentRedemptionCard(item.child, item.redemption) : parentApplicationCard(item.child, item.application))).join("")
         }
       </div>
 
@@ -1653,13 +1729,44 @@ function parentApplicationsView() {
   `;
 }
 
-function parentApplicationFilterRow(activeFilter) {
+function parentApplicationTypeTabs(activeType) {
+  const pendingPointCount = getParentApplications().filter((item) => item.application.status === "pending").length;
+  const pendingAllowanceCount = getParentRedemptions().filter((item) => item.redemption.status === "pending").length;
+  return `
+    <div class="parent-application-type-tabs" role="tablist" aria-label="申請の種類">
+      ${parentApplicationTypeTab("points", "ポイント", activeType, pendingPointCount)}
+      ${parentApplicationTypeTab("allowance", "おこづかい", activeType, pendingAllowanceCount)}
+    </div>
+  `;
+}
+
+function parentApplicationTypeTab(value, label, activeType, pendingCount) {
+  const isActive = value === activeType;
+  return `
+    <button class="${isActive ? "active" : ""}" type="button" role="tab" aria-selected="${isActive ? "true" : "false"}" data-parent-application-type="${value}" data-pending-count="${pendingCount}">
+      ${label}
+      ${pendingCount > 0 ? `<span class="parent-application-type-badge">${pendingCount > 99 ? "99+" : pendingCount}</span>` : ""}
+    </button>
+  `;
+}
+
+function parentApplicationFilterRow(activeFilter, activeType = "points") {
+  const isAllowance = activeType === "allowance";
   return `
     <div class="parent-application-filter-row" aria-label="申請タグ">
       ${parentApplicationFilterButton("all", "すべて", activeFilter)}
       ${parentApplicationFilterButton("pending", "確認待ち", activeFilter)}
-      ${parentApplicationFilterButton("approved", "承認済み", activeFilter)}
-      ${parentApplicationFilterButton("redo", "やり直し", activeFilter)}
+      ${
+        isAllowance
+          ? `
+            ${parentApplicationFilterButton("completed", "支給済み", activeFilter)}
+            ${parentApplicationFilterButton("rejected", "却下", activeFilter)}
+          `
+          : `
+            ${parentApplicationFilterButton("approved", "承認済み", activeFilter)}
+            ${parentApplicationFilterButton("redo", "やり直し", activeFilter)}
+          `
+      }
     </div>
   `;
 }
@@ -1673,6 +1780,13 @@ function parentApplicationFilterButton(value, label, activeFilter) {
   `;
 }
 
+function normalizeParentApplicationFilter(filter, activeType) {
+  const allowedFilters = activeType === "allowance"
+    ? ["all", "pending", "completed", "rejected"]
+    : ["all", "pending", "approved", "redo"];
+  return allowedFilters.includes(filter) ? filter : "all";
+}
+
 function filterParentApplications(items, filter) {
   if (filter === "pending") {
     return items.filter((item) => item.application.status === "pending");
@@ -1684,6 +1798,22 @@ function filterParentApplications(items, filter) {
 
   if (filter === "redo") {
     return items.filter((item) => ["returned", "rejected", "canceled"].includes(item.application.status));
+  }
+
+  return items;
+}
+
+function filterParentRedemptions(items, filter) {
+  if (filter === "pending") {
+    return items.filter((item) => item.redemption.status === "pending");
+  }
+
+  if (filter === "completed") {
+    return items.filter((item) => item.redemption.status === "completed");
+  }
+
+  if (filter === "rejected") {
+    return items.filter((item) => item.redemption.status === "rejected");
   }
 
   return items;
@@ -2006,17 +2136,28 @@ function parentRedemptionsView() {
 
 function parentRedemptionCard(child, redemption) {
   return `
-    <div class="card application-card">
-      <div>
-        <span class="status-pill ${redemption.status}">${redemptionStatusLabel(redemption.status)}</span>
-        <h2>${escapeHtml(child.nickname)}・${redemption.points.toLocaleString()}pt</h2>
-        <p>支給後に完了処理します。</p>
+    <div class="card application-card" data-route="/parent/redemptions/${redemption.id}" role="button" tabindex="0">
+      <div class="application-card-header">
+        <div class="application-card-child">
+          ${childAvatar(child, "application-card-avatar")}
+          <span class="application-card-child-name">${escapeHtml(child.nickname)}</span>
+        </div>
+        <div class="application-card-title">
+          <h2>おこづかい申請</h2>
+          <div class="application-card-score-line">
+            <p>
+              <strong class="application-card-score">${redemption.points.toLocaleString()}</strong>
+              <span class="application-card-score-unit"> pt</span>
+            </p>
+          </div>
+        </div>
+        <div class="application-card-aside">
+          <time datetime="${escapeHtml(redemption.requestedAt)}">${formatDate(redemption.requestedAt)}</time>
+          <span class="status-pill ${redemption.status}">${redemptionStatusLabel(redemption.status)}</span>
+          <strong>${redemption.points.toLocaleString()}円</strong>
+        </div>
+        ${studyPayIcon("chevron-right", "application-card-chevron")}
       </div>
-      <div class="application-meta">
-        <span>${formatDate(redemption.requestedAt)}</span>
-        <strong>${redemption.points.toLocaleString()}円</strong>
-      </div>
-      <button class="secondary-button compact-button" type="button" data-route="/parent/redemptions/${redemption.id}">詳細を見る</button>
     </div>
   `;
 }
@@ -2261,50 +2402,6 @@ function parentReviewExtraFields(application, editable) {
   `;
 }
 
-function childrenPreview(children) {
-  if (children.length === 0) {
-    return `
-      <div class="card empty-state">
-        <div>
-          <strong>まだこどもが登録されていません</strong>
-          <p>こどもを追加すると、ポイント残高やログイン情報をここから確認できます。</p>
-        </div>
-      </div>
-    `;
-  }
-
-  return `
-    <div class="child-list">
-      ${children.map((child) => childCard(child)).join("")}
-    </div>
-  `;
-}
-
-function childrenView() {
-  const children = getChildren();
-  const canAdd = children.length < MAX_CHILDREN;
-  return `
-    <section class="screen home-screen">
-      ${parentSettingsHeader("こども管理")}
-      <div class="page-heading children-page-heading">
-        <p>お子様は最大３名まで登録できます。</p>
-      </div>
-
-      <div class="child-list section-tight">
-        ${
-          children.length === 0
-            ? emptyChildren()
-            : children.map((child) => childCard(child)).join("")
-        }
-      </div>
-
-      ${canAdd ? `<button class="primary-button children-add-button" type="button" data-route="/parent/children/new">こどもを追加する</button>` : `<div class="notice-card">登録できるこどもは最大${MAX_CHILDREN}人です。</div>`}
-
-      ${bottomNav("children")}
-    </section>
-  `;
-}
-
 function childNewView() {
   const children = getChildren();
   const canAdd = children.length < MAX_CHILDREN;
@@ -2312,7 +2409,7 @@ function childNewView() {
   const generatedPassword = generatePassword();
   return `
     <section class="screen home-screen">
-      ${parentPlainHeader("こどもを追加", "/parent/children", "こども管理に戻る")}
+      ${parentPlainHeader("こどもを追加", "/parent", "ホームに戻る")}
       <div class="page-heading settings-page-heading">
         <p>ログインIDとパスワードを自動発行します。</p>
       </div>
@@ -2341,7 +2438,7 @@ function childNewView() {
                     <input id="child-password" name="password" autocomplete="off" value="${generatedPassword}" readonly aria-readonly="true" />
                   </div>
                 </div>
-                <p class="issued-login-note">お子様用のログインIDとパスワードは自動発行されます。お子様用のログインIDとパスワードは設定＞こども管理からいつでも確認できます。</p>
+                <p class="issued-login-note">お子様用のログインIDとパスワードは自動発行されます。お子様用のログインIDとパスワードは保護者ホームのこどもカードからいつでも確認できます。</p>
               </div>
               <div class="hint-card parent-child-form-hint">
                 追加すると、国語・算数・英語の初期科目と標準ポイントルールの準備データを作ります。
@@ -2349,14 +2446,14 @@ function childNewView() {
               <div class="error" id="child-error"></div>
               <div class="parent-child-form-actions">
                 <button class="primary-button" type="submit">こどもを追加する</button>
-                <button class="secondary-button" type="button" data-route="/parent/children">キャンセル</button>
+                <button class="secondary-button" type="button" data-route="/parent">キャンセル</button>
               </div>
             </form>
           `
           : `<div class="notice-card">こどもは最大${MAX_CHILDREN}人までです。</div>`
       }
 
-      ${bottomNav("children")}
+      ${bottomNav("home")}
     </section>
   `;
 }
@@ -2394,7 +2491,7 @@ function childProfilePhotoField(profilePhoto = null) {
 function childDetailView(child) {
   return `
     <section class="screen home-screen parent-child-detail-screen">
-      ${parentPlainHeader("こども詳細", "/parent/children", "こども管理に戻る")}
+      ${parentPlainHeader("こども詳細", "/parent", "ホームに戻る")}
 
       <div class="card detail-card child-login-detail-card">
         <div class="child-login-detail-layout">
@@ -2435,7 +2532,7 @@ function childDetailView(child) {
         <button class="danger-button compact-button" type="button" id="delete-child-button">こどもアカウントを削除</button>
       </div>
 
-      ${bottomNav("children")}
+      ${bottomNav("home")}
     </section>
   `;
 }
@@ -2509,7 +2606,7 @@ function parentChildPointsView(child) {
 
       ${pointHistoryList(child)}
 
-      ${bottomNav("children")}
+      ${bottomNav("home")}
     </section>
   `;
 }
@@ -2544,7 +2641,7 @@ function subjectsView(child) {
         }
       </div>
 
-      ${bottomNav("children")}
+      ${bottomNav("home")}
     </section>
   `;
 }
@@ -2645,7 +2742,7 @@ function pointRulesView(child) {
       `
       }
 
-      ${bottomNav("children")}
+      ${bottomNav("home")}
     </section>
   `;
 }
@@ -2916,9 +3013,9 @@ function notFoundView() {
       ${parentHeader("こども")}
       <div class="card empty-state">
         <strong>こども情報が見つかりません</strong>
-        <button class="primary-button" type="button" data-route="/parent/children">一覧に戻る</button>
+        <button class="primary-button" type="button" data-route="/parent">ホームに戻る</button>
       </div>
-      ${bottomNav("children")}
+      ${bottomNav("home")}
     </section>
   `;
 }
@@ -2946,30 +3043,6 @@ function parentHeader(label) {
         <span>${label}</span>
       </div>
       <button class="text-button" type="button" id="logout-button">ログアウト</button>
-    </div>
-  `;
-}
-
-function childCard(child) {
-  return `
-    <button class="card child-card" type="button" data-route="/parent/children/${child.id}">
-      ${childAvatar(child)}
-      <span class="child-main">
-        <strong>${escapeHtml(child.nickname)}</strong>
-        <span>ID: ${escapeHtml(child.loginId)}</span>
-      </span>
-      <span class="child-points">${getAvailablePoints(child).toLocaleString()}pt</span>
-    </button>
-  `;
-}
-
-function emptyChildren() {
-  return `
-    <div class="card empty-state">
-      <div>
-        <strong>こどもを追加しましょう</strong>
-        <p>追加後に、こども用のログインIDとパスワードを確認できます。</p>
-      </div>
     </div>
   `;
 }
@@ -3552,7 +3625,7 @@ function childHeader(label) {
   return `
     <div class="topbar child-topbar">
       <div class="brand">
-        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase318" alt="allowa" />
+        <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase322" alt="allowa" />
       </div>
       <div class="child-profile-pill">
         <button class="child-account-switch-button" type="button" id="child-parent-switch-trigger" aria-haspopup="menu" aria-expanded="false">
@@ -3579,7 +3652,7 @@ function childBottomNav(active) {
     ["home", "⌂", "ホーム", "/child"],
     ["history", "□", "履歴", "/child/history"],
     ["apply", "+", "申請", "/child/apply"],
-    ["redeem", "¥", "おこづかい", "/child/redeem"],
+    ["redeem", "¥", "おこづかい申請", "/child/redeem"],
     ["points", "pt", "ポイント", "/child/points"],
   ];
 
@@ -3604,11 +3677,11 @@ function bottomNav(active) {
   const parent = loadAccount() || state.parent || initialParent;
   const requestCount = getParentApplications().filter((item) => item.application.status === "pending").length;
   const redemptionCount = getParentRedemptions().filter((item) => item.redemption.status === "pending").length;
+  const applicationCount = requestCount + redemptionCount;
   const notificationCount = getUnreadNotifications(parent).length;
   const items = [
     ["home", studyPayIcon("house", "nav-lucide-icon"), "ホーム", "/parent", 0],
-    ["requests", studyPayIcon("file-check", "nav-lucide-icon"), "ポイント申請", "/parent/applications", requestCount],
-    ["redemptions", studyPayIcon("hand-coins", "nav-lucide-icon"), "おこづかい", "/parent/redemptions", redemptionCount],
+    ["requests", studyPayIcon("list-check", "nav-lucide-icon"), "申請一覧", "/parent/applications", applicationCount],
     ["notifications", studyPayIcon("bell", "nav-lucide-icon"), "通知", "/parent/notifications", notificationCount],
     ["settings", studyPayIcon("settings", "nav-lucide-icon"), "設定", "/parent/settings", 0],
   ];
@@ -3850,6 +3923,13 @@ function bindParentHome() {
 function bindParentApplications() {
   bindParentShell();
   bindPhotoViewer();
+  document.querySelectorAll("[data-parent-application-type]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.parentApplicationsType = button.dataset.parentApplicationType || "points";
+      state.parentApplicationsFilter = Number(button.dataset.pendingCount || 0) > 0 ? "pending" : "all";
+      navigate(state.parentApplicationsType === "allowance" ? "/parent/redemptions" : "/parent/applications");
+    });
+  });
   document.querySelectorAll("[data-parent-application-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.parentApplicationsFilter = button.dataset.parentApplicationFilter || "all";
@@ -4001,6 +4081,19 @@ function bindParentDemoGuide() {
 
 function bindParentNotifications() {
   bindParentShell();
+  document.querySelectorAll("[data-parent-notification-source]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.parentNotificationSource = button.dataset.parentNotificationSource || "child";
+      state.parentNotificationReadFilter = "unread";
+      render();
+    });
+  });
+  document.querySelectorAll("[data-parent-notification-read]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.parentNotificationReadFilter = button.dataset.parentNotificationRead || "unread";
+      render();
+    });
+  });
   document.querySelector("#read-parent-notifications")?.addEventListener("click", () => {
     markParentNotificationsRead();
     render();
@@ -4131,10 +4224,6 @@ function bindParentApplicationDetail(child, application) {
     });
     navigate("/parent/applications");
   });
-}
-
-function bindChildren() {
-  bindParentShell();
 }
 
 function bindChildNew() {
@@ -4456,7 +4545,7 @@ function showChildDeleteModal(child) {
   document.querySelector("#confirm-delete-child")?.addEventListener("click", () => {
     updateChild(child.id, { status: "deleted", deletedAt: new Date().toISOString() });
     closeModal();
-    navigate("/parent/children");
+    navigate("/parent");
   });
   modal.addEventListener("click", (event) => {
     if (event.target === modal) {
@@ -7049,7 +7138,7 @@ function createDemoData() {
         type: "demo_ready",
         title: "デモデータを作成しました",
         message: "親子の申請・承認・おこづかい申請をすぐ確認できます。",
-        route: "/parent/children",
+        route: "/parent",
       }),
       ...(parent.notifications || []),
     ],
@@ -8436,6 +8525,12 @@ function studyPayIcon(name, className = "") {
       <path d="M18 13a6 6 0 0 1-12 0h12Z"/>
       <line x1="9" x2="9.01" y1="9" y2="9"/>
       <line x1="15" x2="15.01" y1="9" y2="9"/>
+    `,
+    "list-check": `
+      <path d="M11 18H3"/>
+      <path d="m15 18 2 2 4-4"/>
+      <path d="M16 12H3"/>
+      <path d="M16 6H3"/>
     `,
     "key-round": `
       <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/>

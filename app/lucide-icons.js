@@ -79,6 +79,12 @@
       <line x1="9" x2="9.01" y1="9" y2="9"/>
       <line x1="15" x2="15.01" y1="9" y2="9"/>
     `,
+    "list-check": `
+      <path d="M11 18H3"/>
+      <path d="m15 18 2 2 4-4"/>
+      <path d="M16 12H3"/>
+      <path d="M16 6H3"/>
+    `,
     plus: `
       <path d="M5 12h14"/>
       <path d="M12 5v14"/>

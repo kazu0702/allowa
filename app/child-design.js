@@ -230,7 +230,7 @@
     return `
       <div class="topbar child-topbar">
         <div class="brand">
-          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase318" alt="allowa" />
+          <img class="header-logo-image child-header-logo-image" src="./logo.svg?v=phase322" alt="allowa" />
         </div>
         <div class="child-profile-pill">
           ${typeof childAvatar === "function" ? childAvatar(child, "child-account-avatar") : ""}
@@ -246,7 +246,7 @@
       ["home", "⌂", "ホーム", "/child"],
       ["history", "□", "履歴", "/child/history"],
       ["apply", "+", "申請", "/child/apply"],
-      ["redeem", "¥", "おこづかい", "/child/redeem"],
+      ["redeem", "¥", "おこづかい申請", "/child/redeem"],
       ["points", "pt", "ポイント", "/child/points"],
     ];
 
