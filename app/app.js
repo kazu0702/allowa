@@ -6,11 +6,16 @@ const LAST_APP_MODE_KEY = "ince_last_app_mode";
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "admin123";
 const MAX_CHILDREN = 3;
+const MAX_OTHER_POINT_TASKS = 30;
 const DEFAULT_SUBJECTS = ["国語", "算数", "英語"];
 const REDEMPTION_UNITS = [100, 1000, 10000];
 const MONTHLY_BONUS_REFERENCES = [
   { key: "monthly_cheer", label: "今月の応援ボーナス", suggestionPercent: 5 },
   { key: "habit_cheer", label: "習慣づくりボーナス", suggestionPercent: 10 },
+];
+const BONUS_SETTING_TYPES = [
+  { value: "event", label: "行事" },
+  { value: "achievement", label: "達成" },
 ];
 const SUPABASE_SNAPSHOT_TABLE = "account_snapshots";
 const SUPABASE_CONFIG = window.INCE_SUPABASE_CONFIG || {};
@@ -43,6 +48,10 @@ const state = {
   parent: loadSessionParent(),
   flash: "",
   monthlyBonusChildId: "",
+  monthlyBonusFormType: "event",
+  monthlyBonusAchievementCategory: "test",
+  monthlyBonusAchievementMetric: "score",
+  monthlyBonusSettingFilter: "event",
   parentApplicationsType: "points",
   parentApplicationsFilter: "all",
   parentNotificationReadFilter: "unread",
@@ -697,7 +706,7 @@ function isCloudAutoRenderBlockedRoute(route) {
     route.startsWith("/child/reapply/") ||
     route === "/child/redeem" ||
     route === "/parent/children/new" ||
-    route === "/parent/monthly-bonus" ||
+    route.startsWith("/parent/monthly-bonus") ||
     route.startsWith("/parent/applications/") ||
     route.endsWith("/subjects") ||
     route.endsWith("/rules")
@@ -733,7 +742,15 @@ function renderParentRoute(app, route) {
 
   if (route === "/parent/monthly-bonus") {
     app.innerHTML = parentMonthlyBonusView();
-    bindParentMonthlyBonus();
+    bindParentShell();
+    return;
+  }
+
+  if (route.startsWith("/parent/monthly-bonus/")) {
+    const childId = decodeURIComponent(route.split("/").at(-1) || "");
+    const child = getChildren().find((item) => item.id === childId);
+    app.innerHTML = child ? parentMonthlyBonusDetailView(child) : notFoundView();
+    child ? bindParentMonthlyBonus() : bindParentShell();
     return;
   }
 
@@ -776,6 +793,12 @@ function renderParentRoute(app, route) {
   if (route === "/parent/settings/cloud") {
     app.innerHTML = parentCloudSettingsView();
     bindParentShell();
+    return;
+  }
+
+  if (route === "/parent/settings/exchange-unit") {
+    app.innerHTML = parentExchangeUnitSettingsView();
+    bindParentExchangeUnitSettings();
     return;
   }
 
@@ -1319,7 +1342,6 @@ function parentHomeChildStatusBlock(child) {
   return `
     <div class="parent-child-status-block">
       ${parentHomeChildStatusCard(child)}
-      ${childPointExchangeUnitCard(child)}
     </div>
   `;
 }
@@ -1367,7 +1389,7 @@ function parentNotificationsView() {
   const visibleNotifications = filterNotificationsByReadState(notifications, readFilter);
   return `
     <section class="screen home-screen notification-screen">
-      ${parentPlainHeader("お知らせ")}
+      ${parentSettingsRootHeader("お知らせ")}
 
       <div class="parent-notification-list-head">
         ${notifications.length ? `<button class="parent-notification-read-all-button" type="button" id="read-parent-notifications">すべて既読にする</button>` : "<span></span>"}
@@ -1434,11 +1456,12 @@ function filterNotificationsByReadState(notifications, readFilter) {
 
 function parentSettingsView() {
   return `
-    <section class="screen home-screen">
-      ${parentSettingsHeader("設定")}
+    <section class="screen home-screen parent-settings-screen">
+      ${parentSettingsRootHeader("設定")}
 
       <div class="settings-menu">
         ${settingsMenuButton("ボーナス設定", "/parent/monthly-bonus")}
+        ${settingsMenuButton("ポイント交換単位", "/parent/settings/exchange-unit")}
         ${settingsMenuButton("プラン・支払い設定", "/parent/billing")}
         ${settingsMenuButton("メールアドレス設定", "/parent/settings/email")}
         ${settingsMenuButton("パスワード変更", "/parent/settings/password")}
@@ -1452,6 +1475,22 @@ function parentSettingsView() {
       ${bottomNav("settings")}
     </section>
   `;
+}
+
+function parentExchangeUnitSettingsView() {
+  const children = getChildren();
+  return parentSettingsDetailView(
+    "ポイント交換単位",
+    `
+      <div class="settings-exchange-unit-list">
+        ${
+          children.length
+            ? children.map(childPointExchangeUnitCard).join("")
+            : `<div class="notice-card">こどもを追加すると、ポイント交換単位を設定できます。</div>`
+        }
+      </div>
+    `,
+  );
 }
 
 function settingsMenuButton(label, route, danger = false, note = "") {
@@ -1718,7 +1757,7 @@ function parentApplicationsView() {
   const filteredItems = isAllowance ? filterParentRedemptions(items, activeFilter) : filterParentApplications(items, activeFilter);
   return `
     <section class="screen home-screen">
-      ${parentPlainHeader("申請一覧")}
+      ${parentSettingsRootHeader("申請一覧")}
       ${parentApplicationTypeTabs(activeType)}
       ${parentApplicationFilterRow(activeFilter, activeType)}
       <div class="page-heading settings-page-heading">
@@ -2258,118 +2297,261 @@ function parentRedemptionCard(child, redemption) {
 
 function parentMonthlyBonusView() {
   const children = getChildren();
-  const selectedChildId = state.monthlyBonusChildId || children[0]?.id || "";
-  const selectedChild = children.find((child) => child.id === selectedChildId) || children[0] || null;
-  const targetMonth = getCurrentMonthValue();
-  const basePoints = selectedChild?.currentPoints || 1000;
-  const flashMessage = state.flash;
-  state.flash = "";
   return `
-    <section class="screen home-screen">
-      ${parentHeader("月次ボーナス")}
-      <div class="page-heading">
-        <div>
-          <h1>月次ボーナス</h1>
-          <p>家庭内ルールとして、追加ポイントを付ける月だけ確認します。</p>
-        </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent">ホーム</button>
-      </div>
-
-      ${flashMessage ? `<div class="success">${escapeHtml(flashMessage)}</div>` : ""}
+    <section class="screen home-screen monthly-bonus-index-screen">
+      ${parentSettingsHeader("ボーナス設定")}
 
       ${
         children.length
           ? `
-            <form class="card form form-card monthly-child-card" id="monthly-bonus-child-form">
-              <div class="monthly-card-head">
-                <div>
-                  <span class="summary-kicker">今月の確認</span>
-                  <h2>${escapeHtml(selectedChild?.nickname || "こども")}への追加ポイント</h2>
-                </div>
-              </div>
-              <div class="field">
-                <label for="monthly-bonus-child">対象のこども</label>
-                <select id="monthly-bonus-child" name="childId">
-                  ${children.map((child) => `<option value="${escapeHtml(child.id)}" ${selectedAttr(selectedChild?.id, child.id)}>${escapeHtml(child.nickname)}</option>`).join("")}
-                </select>
-              </div>
-              <div class="monthly-metrics">
-                <div class="metric-item">
-                  <span>現在ポイント</span>
-                  <strong>${(selectedChild?.currentPoints || 0).toLocaleString()}pt</strong>
-                </div>
-                <div class="metric-item">
-                  <span>対象月</span>
-                  <strong>${targetMonth.replace("-", "年")}月</strong>
-                </div>
-              </div>
-              <p class="card-copy">こどもの申請とは別に、保護者が確認してから付与します。何もしなければポイントは増えません。</p>
-            </form>
+            <div class="monthly-bonus-child-list">
+              ${children.map(monthlyBonusChildCard).join("")}
+            </div>
+          `
+          : `<div class="card empty-state"><strong>こどもがまだ登録されていません</strong><p>ボーナス設定を使うには、先にこどもを追加してください。</p><button class="primary-button compact-button" type="button" data-route="/parent/children/new">こどもを追加する</button></div>`
+      }
 
-            <form class="card form form-card monthly-reference-form" id="monthly-bonus-reference-form">
-              <div class="form-heading">
-                <span class="status-pill home-pill">任意</span>
-                <h2>参考ボーナス候補</h2>
-              </div>
-              <p class="card-copy">家庭内ルールの候補です。使うかどうかと最終的なポイント数は、いずれも保護者が決めます。</p>
-              <input type="hidden" name="childId" value="${escapeHtml(selectedChild?.id || "")}" />
-              <div class="monthly-form-grid">
-                <div class="field">
-                  <label for="monthly-bonus-month">対象月</label>
-                  <input id="monthly-bonus-month" name="targetMonth" type="month" value="${targetMonth}" />
-                </div>
-                <div class="field">
-                  <label for="monthly-bonus-base">計算の基準ポイント</label>
-                  <input id="monthly-bonus-base" name="basePoints" inputmode="numeric" value="${basePoints}" />
-                  <span class="field-help">候補を計算するための数字です。</span>
-                </div>
-              </div>
-              <div class="application-list section-tight">
-                ${MONTHLY_BONUS_REFERENCES.map((reference) => monthlyBonusReferenceCard(reference, basePoints)).join("")}
-              </div>
-              <div class="notice-card compact-notice">付与しない月は何もしなくて大丈夫です。必要な月だけ操作してください。</div>
-            </form>
+      ${bottomNav("settings")}
+    </section>
+  `;
+}
 
-            <form class="card form form-card monthly-custom-form" id="monthly-bonus-custom-form">
-              <div class="form-heading">
-                <span class="status-pill home-pill">家庭内ルール</span>
-                <h2>家庭独自ボーナス</h2>
-              </div>
-              <p class="card-copy">誕生月ボーナスなど、家庭ごとの理由で追加ポイントを付与できます。</p>
-              <input type="hidden" name="childId" value="${escapeHtml(selectedChild?.id || "")}" />
+function monthlyBonusChildCard(child) {
+  return `
+    <button class="card monthly-bonus-child-card" type="button" data-route="/parent/monthly-bonus/${encodeURIComponent(child.id)}">
+      ${childAvatar(child, "monthly-bonus-child-avatar")}
+      <span>${escapeHtml(child.nickname)}</span>
+      ${studyPayIcon("chevron-right", "monthly-bonus-child-chevron")}
+    </button>
+  `;
+}
+
+function parentMonthlyBonusDetailView(selectedChild) {
+  const bonusSettings = getChildBonusSettings(selectedChild);
+  const flashMessage = state.flash;
+  const subjects = getBonusAvailableSubjects(selectedChild);
+  const gradeOptions = getBonusGradeOptions(selectedChild);
+  state.flash = "";
+  return `
+    <section class="screen home-screen">
+      ${parentSettingsHeader(`${selectedChild?.nickname || "こども"}のボーナス設定`)}
+
+      ${flashMessage ? `<div class="success">${escapeHtml(flashMessage)}</div>` : ""}
+
+      ${
+        selectedChild
+          ? `
+            <form class="card form form-card monthly-bonus-setting-form" id="monthly-bonus-setting-form">
+              <h2>ボーナスを追加</h2>
+              <input type="hidden" name="childId" value="${escapeHtml(selectedChild.id)}" />
               <div class="field">
-                <label for="custom-bonus-month">対象月</label>
-                <input id="custom-bonus-month" name="targetMonth" type="month" value="${targetMonth}" />
+                ${bonusChoiceButtons("type", [
+                  { value: "event", label: "行事" },
+                  { value: "achievement", label: "条件達成" },
+                ], state.monthlyBonusFormType)}
               </div>
-              <div class="field">
-                <label for="custom-bonus-name">ボーナス名</label>
-                <input id="custom-bonus-name" name="name" placeholder="例: 誕生月ボーナス" />
+              <div class="bonus-type-fields" data-bonus-type-section="event">
+                <div class="bonus-sentence-line">
+                  <span>毎年</span>
+                  <div class="bonus-select-wrap">
+                    <select id="bonus-event-month" name="eventMonth" aria-label="月">
+                      ${Array.from({ length: 12 }, (_, index) => {
+                        const month = index + 1;
+                        return `<option value="${month}">${month}月</option>`;
+                      }).join("")}
+                    </select>
+                    ${studyPayIcon("chevron-down", "bonus-select-icon")}
+                  </div>
+                  <div class="bonus-select-wrap bonus-day-select">
+                    <select id="bonus-event-day" name="eventDay" aria-label="日">
+                      ${Array.from({ length: 31 }, (_, index) => {
+                        const day = index + 1;
+                        return `<option value="${day}">${day}日</option>`;
+                      }).join("")}
+                    </select>
+                    ${studyPayIcon("chevron-down", "bonus-select-icon")}
+                  </div>
+                </div>
+                <div class="bonus-sentence-line">
+                  <input id="bonus-event-name" name="eventName" placeholder="例: 誕生日" autocomplete="off" />
+                  <span>に</span>
+                </div>
+                <div class="bonus-sentence-line">
+                  <input id="bonus-event-points" name="eventPoints" inputmode="numeric" placeholder="例: 5000" />
+                  <span>ポイント</span>
+                </div>
               </div>
-              <div class="field">
-                <label for="custom-bonus-points">付与ポイント</label>
-                <input id="custom-bonus-points" name="points" inputmode="numeric" placeholder="例: 500" />
+              <div class="bonus-type-fields" data-bonus-type-section="achievement" hidden>
+                <div class="field">
+                  ${bonusChoiceButtons("achievementCategory", [
+                    { value: "test", label: "テスト" },
+                    { value: "grade", label: "成績" },
+                  ], state.monthlyBonusAchievementCategory)}
+                </div>
+                <div class="field" data-achievement-category-section="test">
+                  ${bonusChoiceButtons("achievementMetric", [
+                    { value: "score", label: "点数" },
+                    { value: "rank", label: "順位" },
+                  ], state.monthlyBonusAchievementMetric)}
+                </div>
+                <div class="bonus-condition-divider">
+                  <span>条件</span>
+                </div>
+                <p class="bonus-condition-note" data-achievement-category-section="test">50点満点のテストはボーナスの対象外となります。</p>
+                <div class="bonus-sentence-line">
+                  <div class="bonus-select-wrap bonus-subject-select">
+                    <select id="bonus-achievement-subject" name="achievementSubjectId" aria-label="科目">
+                      ${
+                        subjects.length
+                          ? subjects.map((subject) => `<option value="${escapeHtml(subject.id)}">${escapeHtml(subject.name)}</option>`).join("")
+                          : `<option value="">科目なし</option>`
+                      }
+                    </select>
+                    ${studyPayIcon("chevron-down", "bonus-select-icon")}
+                  </div>
+                  <span>の</span>
+                  <span data-bonus-sentence-category-text>テストで</span>
+                </div>
+                <div class="bonus-sentence-line" data-achievement-category-section="test" data-achievement-metric-section="score">
+                  <input id="bonus-achievement-score" class="bonus-inline-number" name="achievementScore" inputmode="numeric" placeholder="100" aria-label="点数" />
+                  <span>点以上を</span>
+                </div>
+                <div class="bonus-sentence-line" data-achievement-category-section="test" data-achievement-metric-section="rank" hidden>
+                  <input id="bonus-achievement-rank" class="bonus-inline-number" name="achievementRank" inputmode="numeric" placeholder="1" aria-label="順位" />
+                  <span>位以上を</span>
+                </div>
+                <div class="bonus-sentence-line" data-achievement-category-section="grade" hidden>
+                  <div class="bonus-select-wrap">
+                    <select id="bonus-achievement-grade" name="achievementGrade" aria-label="成績">
+                      ${gradeOptions.map((item) => `<option value="${escapeHtml(item.label)}">${escapeHtml(item.label)}</option>`).join("")}
+                    </select>
+                    ${studyPayIcon("chevron-down", "bonus-select-icon")}
+                  </div>
+                  <span>を</span>
+                </div>
+                <div class="bonus-sentence-line">
+                  <input id="bonus-achievement-count" class="bonus-inline-number" name="achievementCount" inputmode="numeric" placeholder="10" aria-label="達成回数" />
+                  <span>回</span>
+                  <div class="bonus-select-wrap bonus-mode-select">
+                    <select id="bonus-achievement-mode" name="achievementMode" aria-label="達成方法">
+                      <option value="single">達成したら</option>
+                      <option value="streak">連続達成したら</option>
+                    </select>
+                    ${studyPayIcon("chevron-down", "bonus-select-icon")}
+                  </div>
+                </div>
+                <div class="bonus-sentence-line">
+                  <input id="bonus-achievement-points" class="bonus-inline-number" name="achievementPoints" inputmode="numeric" placeholder="100" />
+                  <span>ポイント</span>
+                </div>
               </div>
-              <div class="field">
-                <label for="custom-bonus-note">メモ</label>
-                <textarea id="custom-bonus-note" name="note" rows="3" placeholder="家庭内ルールや理由を残せます"></textarea>
-              </div>
-              <div class="error" id="monthly-bonus-error"></div>
-              <button class="primary-button" type="submit">独自ボーナスを付与する</button>
+              <div class="error" id="bonus-setting-error"></div>
+              <button class="primary-button" type="submit">保存</button>
             </form>
 
             <div class="section-label">
-              <span>ボーナス履歴</span>
+              <span>設定中のボーナス</span>
             </div>
-            <div class="application-list section-tight monthly-history-list">
-              ${monthlyBonusList(selectedChild)}
+            <div class="monthly-bonus-setting-filter" role="tablist" aria-label="ボーナス種別">
+              <button class="${state.monthlyBonusSettingFilter === "event" ? "active" : ""}" type="button" data-bonus-setting-filter="event">行事系</button>
+              <button class="${state.monthlyBonusSettingFilter === "achievement" ? "active" : ""}" type="button" data-bonus-setting-filter="achievement">達成系</button>
+            </div>
+            <div class="monthly-bonus-setting-list">
+              ${monthlyBonusSettingsList(selectedChild, bonusSettings)}
             </div>
           `
-          : `<div class="card empty-state"><strong>こどもがまだ登録されていません</strong><p>月次ボーナスを使うには、先にこどもを追加してください。</p><button class="primary-button compact-button" type="button" data-route="/parent/children/new">こどもを追加する</button></div>`
+          : `<div class="card empty-state"><strong>こどもが見つかりません</strong><p>設定画面からこどもを選び直してください。</p><button class="primary-button compact-button" type="button" data-route="/parent/monthly-bonus">こどもを選ぶ</button></div>`
       }
 
-      ${bottomNav("home")}
+      ${bottomNav("settings")}
     </section>
   `;
+}
+
+function monthlyBonusSettingsList(child, settings) {
+  const filter = state.monthlyBonusSettingFilter || "event";
+  const visibleSettings = settings.filter((setting) => !isHiddenDemoBonusSetting(child, setting));
+  const filteredSettings = visibleSettings.filter((setting) => setting.type === filter);
+  if (!settings.length) {
+    return `<div class="empty-state monthly-bonus-setting-empty"><strong>ボーナス設定はまだありません</strong><p>ボーナスを設定しておくと誕生日・お年玉などの行事や「国語で90点以上を5回連続達成したら100pt」などの条件達成時に自動でポイントを付与することができます。</p></div>`;
+  }
+
+  if (!filteredSettings.length) {
+    return `<div class="empty-state monthly-bonus-setting-empty"><strong>${filter === "event" ? "行事系" : "達成系"}のボーナス設定はまだありません</strong></div>`;
+  }
+
+  return filteredSettings.map((setting) => monthlyBonusSettingCard(child, setting)).join("");
+}
+
+function isHiddenDemoBonusSetting(child, setting) {
+  return child?.id === "child-demo-mana" && setting.id === "bonus-setting-demo-new-year";
+}
+
+function monthlyBonusSettingCard(child, setting) {
+  const title = formatBonusSettingTitle(setting);
+  return `
+    <div class="monthly-bonus-setting-row">
+      <div>
+        <h2>${escapeHtml(title)}</h2>
+      </div>
+      <strong>${Number(setting.points || 0).toLocaleString()}<span>pt</span></strong>
+      <button class="rule-other-icon-button is-danger" type="button" data-delete-bonus-setting="${escapeHtml(setting.id)}" data-bonus-setting-child-id="${escapeHtml(child.id)}" aria-label="${escapeHtml(title)}を削除">
+        ${studyPayIcon("trash-2", "rule-other-icon")}
+      </button>
+    </div>
+  `;
+}
+
+function formatBonusSettingTitle(setting) {
+  if (setting.type === "event") {
+    return [setting.condition, setting.name].filter(Boolean).join(" ") || "条件未設定";
+  }
+
+  const title = setting.condition || setting.name || "条件未設定";
+  return title.replaceAll("のテストで", " ").replaceAll("テストで", "");
+}
+
+function bonusSettingTypeLabel(type) {
+  return BONUS_SETTING_TYPES.find((item) => item.value === type)?.label || "その他";
+}
+
+function bonusChoiceButtons(name, options, selectedValue) {
+  return `
+    <div class="bonus-choice-group" role="group">
+      <input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(selectedValue)}" data-bonus-choice-value="${escapeHtml(name)}" />
+      ${options.map((option) => `
+        <button class="bonus-choice-button ${option.value === selectedValue ? "active" : ""}" type="button" data-bonus-choice="${escapeHtml(name)}" data-bonus-choice-option="${escapeHtml(option.value)}">
+          ${escapeHtml(option.label)}
+        </button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function bonusConditionTypeLabel(type) {
+  if (type === "annual_date") {
+    return "毎年指定日";
+  }
+  if (type === "achievement_score" || type === "achievement_rank" || type === "achievement_grade") {
+    return "達成条件";
+  }
+  return "条件";
+}
+
+function getBonusGradeOptions(child) {
+  const subject = getActiveSubjects(child || {})[0];
+  const rule = getEffectivePointRule(child || {}, subject?.id || "", "grade_5");
+  return normalizeGradeSettings("grade_5", rule.settings);
+}
+
+function getBonusAvailableSubjects(child) {
+  const usedSubjectIds = new Set(
+    getChildBonusSettings(child)
+      .filter((setting) => setting.type === "achievement")
+      .map((setting) => setting.conditionDetails?.subjectId)
+      .filter(Boolean),
+  );
+  return getActiveSubjects(child || {}).filter((subject) => !usedSubjectIds.has(subject.id));
 }
 
 function monthlyBonusReferenceCard(reference, basePoints) {
@@ -2889,15 +3071,16 @@ function parentRuleFilterButton(value, label, activeFilter) {
 function parentRuleOtherPanel(child) {
   const tasks = getOtherPointTasks(child);
   const categories = getOtherTaskCategories(child);
-  const activeFilter = child.ruleOtherCategoryFilter || "all";
-  const visibleTasks = activeFilter === "all" ? tasks : tasks.filter((task) => (task.category || "その他") === activeFilter);
+  const visibleTasks = sortOtherTasksByCategory(tasks, categories);
+  const remainingTaskCount = Math.max(0, MAX_OTHER_POINT_TASKS - tasks.length);
+  const canAddTask = remainingTaskCount > 0;
   const isAdding = Boolean(child.ruleOtherTaskFormOpen);
   const editingTask = tasks.find((task) => task.id === child.ruleOtherTaskEditingId) || null;
   return `
     <div class="rule-other-panel">
       <div class="rule-other-head">
-        ${otherTaskCategoryFilter(categories, activeFilter)}
-        <button class="rule-other-add-button" type="button" data-open-other-task-form>
+        <span class="rule-other-remaining-count">あと${remainingTaskCount}個追加できます</span>
+        <button class="rule-other-add-button" type="button" data-open-other-task-form ${canAddTask ? "" : "disabled"}>
           ${studyPayIcon("plus", "rule-add-row-icon")}
           追加
         </button>
@@ -2913,15 +3096,25 @@ function parentRuleOtherPanel(child) {
         ${
           tasks.length === 0
             ? `<div class="rule-other-empty">タスクを追加してください</div>`
-            : visibleTasks.length
-              ? visibleTasks.map((task) => otherPointTaskRow(task, categories)).join("")
-              : `<div class="rule-other-empty">このカテゴリーのタスクはありません</div>`
+            : visibleTasks.map((task) => otherPointTaskRow(task, categories)).join("")
         }
       </div>
 
       ${isAdding ? otherPointTaskForm(child, editingTask) : ""}
     </div>
   `;
+}
+
+function sortOtherTasksByCategory(tasks, categories) {
+  const categoryOrder = new Map(categories.map((category, index) => [category.name, index]));
+  return [...tasks].sort((a, b) => {
+    const categoryA = categoryOrder.has(a.category) ? categoryOrder.get(a.category) : Number.MAX_SAFE_INTEGER;
+    const categoryB = categoryOrder.has(b.category) ? categoryOrder.get(b.category) : Number.MAX_SAFE_INTEGER;
+    if (categoryA !== categoryB) {
+      return categoryA - categoryB;
+    }
+    return new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+  });
 }
 
 function otherTaskCategoryFilter(categories, activeFilter) {
@@ -2987,7 +3180,6 @@ function otherPointTaskForm(child, task = null) {
             <div class="rule-edit-field">
               <div class="rule-edit-label-row">
                 <label for="other-task-category">カテゴリー</label>
-                <button class="rule-category-add-button" type="button" data-open-other-category-modal>カテゴリー追加</button>
               </div>
               <input type="hidden" id="other-task-category" name="category" value="${escapeHtml(selectedCategory.name)}" />
               <div class="rule-subject-picker rule-other-category-picker">
@@ -3033,17 +3225,20 @@ function otherTaskCategoryTag(category) {
 }
 
 function childPointExchangeUnitCard(child) {
+  const unit = Number(child.redemptionUnit || 100);
   return `
     <div class="card detail-card child-point-exchange-unit-card" data-exchange-unit-child-id="${escapeHtml(child.id)}">
-      <span class="summary-kicker">ポイント交換単位</span>
-      <div class="segmented" role="group" aria-label="ポイント交換単位">
-        ${REDEMPTION_UNITS.map((unit) => `
-          <button class="segment-button ${child.redemptionUnit === unit ? "active" : ""}" type="button" data-redemption-unit="${unit}">
-            ${unit.toLocaleString()}pt
-          </button>
-        `).join("")}
+      <div class="exchange-unit-child-profile">
+        ${childAvatar(child, "exchange-unit-avatar")}
+        <span>${escapeHtml(child.nickname)}</span>
       </div>
-      <p class="fine-print">こどもがおこづかい申請で使う単位です。</p>
+      <label class="exchange-unit-field" for="exchange-unit-${escapeHtml(child.id)}">
+        <span class="exchange-unit-input-wrap">
+          <input id="exchange-unit-${escapeHtml(child.id)}" name="redemptionUnit" inputmode="numeric" value="${escapeHtml(String(unit))}" data-redemption-unit-input />
+          <span>pt</span>
+        </span>
+      </label>
+      <p class="error exchange-unit-error" aria-live="polite"></p>
     </div>
   `;
 }
@@ -3272,6 +3467,14 @@ function parentSettingsHeader(title) {
   return parentPlainHeader(title, "/parent/settings", "設定に戻る");
 }
 
+function parentSettingsRootHeader(title) {
+  return `
+    <div class="topbar parent-settings-topbar">
+      <h1>${escapeHtml(title)}</h1>
+    </div>
+  `;
+}
+
 function parentPlainHeader(title, backRoute = "/parent", backLabel = "ホームに戻る") {
   return `
     <div class="topbar parent-settings-topbar">
@@ -3412,7 +3615,7 @@ function childNotificationsView(child) {
 function childRedeemView(child) {
   const flashMessage = state.flash;
   state.flash = "";
-  const unit = child.redemptionUnit || 1000;
+  const unit = child.redemptionUnit || 100;
   const pendingRedemptionPoints = getPendingRedemptionPoints(child);
   const availablePoints = getAvailablePoints(child);
   const maxUnits = Math.floor(availablePoints / unit);
@@ -3508,6 +3711,7 @@ function redemptionCard(redemption) {
 
 function childApplyView(child, editingApplication = null) {
   const subjects = getActiveSubjects(child);
+  const otherTasks = sortOtherTasksByCategory(getOtherPointTasks(child), getOtherTaskCategories(child));
   const isReapply = Boolean(editingApplication?.isReapply);
   const isEditing = Boolean(editingApplication?.id && !isReapply);
   const selectedCategory = editingApplication?.category || "test";
@@ -3523,7 +3727,7 @@ function childApplyView(child, editingApplication = null) {
       ${childHeader("申請")}
       <div class="page-heading child-page-heading">
         <div>
-          <h1>${isEditing ? "申請を修正" : isReapply ? "再申請" : "がんばり申請"}</h1>
+          <h1>${isEditing ? "申請を修正" : isReapply ? "再申請" : "ポイント申請"}</h1>
           <p>${isEditing ? "確認待ちの申請だけ修正できます。" : isReapply ? "キャンセルした申請を確認待ちに戻します。" : "写真と内容を送って、保護者に確認してもらいます。"}</p>
         </div>
       </div>
@@ -3586,12 +3790,19 @@ function childApplyView(child, editingApplication = null) {
 
         <div class="apply-section hidden" data-apply-section="other">
           <div class="field">
-            <label for="other-content">内容</label>
-            <textarea id="other-content" name="otherContent" rows="4" placeholder="例: 漢字ドリルを10ページ進めた">${escapeHtml(editingApplication?.otherContent || "")}</textarea>
-          </div>
-          <div class="field">
-            <label for="requested-points">希望ポイント</label>
-            <input id="requested-points" name="requestedPoints" inputmode="numeric" placeholder="空欄ならおまかせ" value="${editingApplication?.requestedPoints || ""}" />
+            <label for="other-task-id">タスク</label>
+            <select id="other-task-id" name="otherTaskId" ${otherTasks.length ? "" : "disabled"}>
+              ${
+                otherTasks.length
+                  ? otherTasks.map((task) => `
+                    <option value="${escapeHtml(task.id)}" ${selectedAttr(editingApplication?.otherTaskId, task.id)}>
+                      ${escapeHtml(task.name)}（${Number(task.points || 0).toLocaleString()}pt）
+                    </option>
+                  `).join("")
+                  : `<option value="">設定済みのタスクがありません</option>`
+              }
+            </select>
+            <span class="field-help">${otherTasks.length ? "保護者が設定したタスクから選びます。" : "保護者にタスクを追加してもらってください。"}</span>
           </div>
         </div>
 
@@ -3978,11 +4189,14 @@ function notificationCard(notification, context = {}) {
   const owner = context.owner || "parent";
   const child = owner === "parent" && source === "child" ? getNotificationChild(notification) : null;
   const shouldShowMessage = !(owner === "parent" && source === "child");
+  const avatar = child
+    ? `<div class="notification-avatar" aria-hidden="true">${childAvatar(child, "notification-child-avatar")}</div>`
+    : source === "child"
+      ? `<div class="notification-avatar" aria-hidden="true">${studyPayIcon("file-check", "notification-avatar-icon")}</div>`
+      : "";
   return `
-    <div class="notification-card ${source === "child" ? "from-child" : "from-system"} ${isUnread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}" data-notification-owner="${escapeHtml(owner)}" ${notification.route ? `data-notification-route="${escapeHtml(notification.route)}"` : ""} ${context.childId ? `data-notification-child-id="${escapeHtml(context.childId)}"` : ""}>
-      <div class="notification-avatar" aria-hidden="true">
-        ${child ? childAvatar(child, "notification-child-avatar") : studyPayIcon(source === "child" ? "file-check" : "bell", "notification-avatar-icon")}
-      </div>
+    <div class="notification-card ${source === "child" ? "from-child" : "from-system"} ${avatar ? "" : "no-avatar"} ${isUnread ? "unread" : ""}" data-notification-id="${escapeHtml(notification.id)}" data-notification-owner="${escapeHtml(owner)}" ${notification.route ? `data-notification-route="${escapeHtml(notification.route)}"` : ""} ${context.childId ? `data-notification-child-id="${escapeHtml(context.childId)}"` : ""}>
+      ${avatar}
       <div class="notification-message-stack">
         <div class="notification-bubble">
           <div class="notification-title-row">
@@ -4310,19 +4524,44 @@ function bindParentHome() {
 }
 
 function bindHomeExchangeUnitButtons() {
-  document.querySelectorAll("[data-exchange-unit-child-id] [data-redemption-unit]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const card = button.closest("[data-exchange-unit-child-id]");
-      const childId = card?.dataset.exchangeUnitChildId;
-      if (!childId) {
-        return;
-      }
-
-      updateChild(childId, { redemptionUnit: Number(button.dataset.redemptionUnit) });
-      render();
-    });
+  document.querySelectorAll("[data-exchange-unit-child-id] [data-redemption-unit-input]").forEach((input) => {
+    input.addEventListener("input", () => validateExchangeUnitInput(input));
+    input.addEventListener("change", () => saveExchangeUnitInput(input));
+    input.addEventListener("blur", () => saveExchangeUnitInput(input));
   });
+}
+
+function validateExchangeUnitInput(input) {
+  const card = input.closest("[data-exchange-unit-child-id]");
+  const error = card?.querySelector(".exchange-unit-error");
+  const value = Number(String(input.value || "").replaceAll(",", ""));
+
+  if (!Number.isInteger(value) || value < 1 || value > 10000) {
+    input.classList.add("is-error");
+    if (error) {
+      error.textContent = "1〜10000の数字を入力してください。";
+    }
+    return null;
+  }
+
+  input.classList.remove("is-error");
+  if (error) {
+    error.textContent = "";
+  }
+  return value;
+}
+
+function saveExchangeUnitInput(input) {
+  const card = input.closest("[data-exchange-unit-child-id]");
+  const childId = card?.dataset.exchangeUnitChildId;
+  const value = validateExchangeUnitInput(input);
+
+  if (!childId || value === null) {
+    return;
+  }
+
+  input.value = String(value);
+  updateChild(childId, { redemptionUnit: value });
 }
 
 function bindParentApplications() {
@@ -4349,110 +4588,245 @@ function bindParentRedemptions() {
 
 function bindParentMonthlyBonus() {
   bindParentShell();
-
-  document.querySelector("#monthly-bonus-child")?.addEventListener("change", (event) => {
-    state.monthlyBonusChildId = event.currentTarget.value;
-    render();
-  });
-
-  document.querySelectorAll(".grant-reference-bonus").forEach((button) => {
+  syncBonusSettingFields();
+  document.querySelector("#bonus-achievement-mode")?.addEventListener("change", syncBonusSettingFields);
+  document.querySelectorAll("[data-bonus-choice]").forEach((button) => {
     button.addEventListener("click", () => {
-      const form = document.querySelector("#monthly-bonus-reference-form");
-      const formData = new FormData(form);
-      const reference = MONTHLY_BONUS_REFERENCES.find((item) => item.key === button.dataset.referenceKey);
-      const basePoints = Number(formData.get("basePoints") || 0);
-      const suggestedPoints = Math.round(basePoints * ((reference?.suggestionPercent || 0) / 100));
-      const points = Number(formData.get(`referencePoints-${reference?.key}`) || suggestedPoints);
-      const childId = String(formData.get("childId") || "");
-      const targetMonth = String(formData.get("targetMonth") || getCurrentMonthValue());
-
-      if (!reference || !childId || points <= 0) {
-        state.flash = "付与できる参考ポイントがありません。";
-        render();
-        return;
-      }
-
-      grantMonthlyBonus({
-        childId,
-        targetMonth,
-        source: reference.key,
-        name: `${reference.label}`,
-        points,
-        referenceRate: reference.suggestionPercent,
-        referencePoints: suggestedPoints,
-        note: `${reference.label}を家庭内ルールとして保護者が付与`,
+      const name = button.dataset.bonusChoice;
+      const value = button.dataset.bonusChoiceOption || "";
+      const group = button.closest(".bonus-choice-group");
+      group?.querySelectorAll("[data-bonus-choice]").forEach((item) => {
+        item.classList.toggle("active", item === button);
       });
-      state.flash = `${reference.label}を付与しました。`;
-      render();
+      const input = document.querySelector(`[data-bonus-choice-value="${name}"]`);
+      if (input) {
+        input.value = value;
+      }
+      if (name === "type") {
+        state.monthlyBonusFormType = value || "event";
+      }
+      if (name === "achievementCategory") {
+        state.monthlyBonusAchievementCategory = value || "test";
+      }
+      if (name === "achievementMetric") {
+        state.monthlyBonusAchievementMetric = value || "score";
+      }
+      syncBonusSettingFields();
     });
   });
 
-  document.querySelectorAll(".skip-reference-bonus").forEach((button) => {
-    button.addEventListener("click", () => {
-      const form = document.querySelector("#monthly-bonus-reference-form");
-      const formData = new FormData(form);
-      const reference = MONTHLY_BONUS_REFERENCES.find((item) => item.key === button.dataset.referenceKey);
-      const childId = String(formData.get("childId") || "");
-      const targetMonth = String(formData.get("targetMonth") || getCurrentMonthValue());
-      const basePoints = Number(formData.get("basePoints") || 0);
-      const referencePoints = Math.round(basePoints * ((reference?.suggestionPercent || 0) / 100));
-
-      if (!reference || !childId) {
-        state.flash = "対象を確認してください。";
-        render();
-        return;
-      }
-
-      skipMonthlyBonus({
-        childId,
-        targetMonth,
-        source: reference.key,
-        name: `${reference.label}`,
-        referenceRate: reference.suggestionPercent,
-        referencePoints,
-        note: `${reference.label}を確認し、今月は付与しない判断`,
-      });
-      state.flash = `${reference.label}を付与なしにしました。`;
-      render();
-    });
-  });
-
-  document.querySelector("#monthly-bonus-custom-form")?.addEventListener("submit", (event) => {
+  document.querySelector("#monthly-bonus-setting-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const childId = String(formData.get("childId") || "");
-    const targetMonth = String(formData.get("targetMonth") || getCurrentMonthValue());
-    const name = String(formData.get("name") || "").trim();
-    const points = Number(formData.get("points") || 0);
-    const note = String(formData.get("note") || "").trim();
-    const error = document.querySelector("#monthly-bonus-error");
+    const type = String(formData.get("type") || "event");
+    const name = buildBonusSettingName(formData, findChild(childId));
+    const conditionType = buildBonusConditionType(formData);
+    const conditionDetails = buildBonusConditionDetails(formData, findChild(childId));
+    const condition = bonusConditionSummary(conditionType, conditionDetails);
+    const points = Number(type === "achievement" ? formData.get("achievementPoints") : formData.get("eventPoints"));
+    const error = document.querySelector("#bonus-setting-error");
 
-    if (!childId || !name || points <= 0) {
-      error.textContent = "ボーナス名と付与ポイントを入力してください。";
+    if (!childId || !name || !isValidBonusCondition(conditionType, conditionDetails) || points <= 0) {
+      error.textContent = "ボーナス名、条件、ポイントを入力してください。";
       return;
     }
 
-    grantMonthlyBonus({
+    addBonusSetting({
       childId,
-      targetMonth,
-      source: "custom",
+      type,
       name,
+      condition,
+      conditionType,
+      conditionDetails,
       points,
-      referenceRate: null,
-      referencePoints: null,
-      note,
     });
-    state.flash = `${name}を付与しました。`;
+    state.flash = `${name}を保存しました。`;
+    state.monthlyBonusSettingFilter = type;
     render();
   });
 
-  document.querySelectorAll(".cancel-monthly-bonus").forEach((button) => {
+  document.querySelectorAll("[data-bonus-setting-filter]").forEach((button) => {
     button.addEventListener("click", () => {
-      const canceled = cancelMonthlyBonus(button.dataset.bonusId);
-      state.flash = canceled ? "月次ボーナスを取り消しました。" : "おこづかい申請中、または支給済みのポイントがあるため取り消せません。";
+      state.monthlyBonusSettingFilter = button.dataset.bonusSettingFilter || "event";
       render();
     });
   });
+
+  document.querySelectorAll("[data-delete-bonus-setting]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const child = findChild(button.dataset.bonusSettingChildId);
+      const setting = getChildBonusSettings(child).find((item) => item.id === button.dataset.deleteBonusSetting);
+      if (child && setting) {
+        showBonusSettingDeleteModal(child, setting);
+      }
+    });
+  });
+}
+
+function showBonusSettingDeleteModal(child, setting) {
+  document.querySelector("#bonus-setting-delete-modal")?.remove();
+  const title = formatBonusSettingTitle(setting);
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal child-delete-modal";
+  modal.id = "bonus-setting-delete-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="bonus-setting-delete-title">
+      <h2 id="bonus-setting-delete-title">ボーナス設定を削除しますか？</h2>
+      <p class="fine-print">「${escapeHtml(title)}」を削除します。この操作は元に戻せません。</p>
+      <div class="confirm-actions">
+        <button class="danger-button child-delete-modal-confirm" type="button" id="confirm-bonus-setting-delete">削除する</button>
+        <button class="secondary-button" type="button" id="cancel-bonus-setting-delete">キャンセル</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  document.querySelector("#cancel-bonus-setting-delete")?.addEventListener("click", closeModal);
+  document.querySelector("#confirm-bonus-setting-delete")?.addEventListener("click", () => {
+    deleteBonusSetting(child.id, setting.id);
+    closeModal();
+    render();
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+}
+
+function syncBonusSettingFields() {
+  const selectedType = document.querySelector('[data-bonus-choice-value="type"]')?.value || "event";
+  const achievementCategory = document.querySelector('[data-bonus-choice-value="achievementCategory"]')?.value || "test";
+  const achievementMetric = document.querySelector('[data-bonus-choice-value="achievementMetric"]')?.value || "score";
+
+  document.querySelectorAll("[data-bonus-type-section]").forEach((section) => {
+    section.hidden = section.dataset.bonusTypeSection !== selectedType;
+  });
+
+  document.querySelectorAll("[data-achievement-category-section]").forEach((section) => {
+    section.hidden = selectedType !== "achievement" || section.dataset.achievementCategorySection !== achievementCategory;
+  });
+
+  document.querySelectorAll("[data-achievement-metric-section]").forEach((section) => {
+    section.hidden = selectedType !== "achievement" || achievementCategory !== "test" || section.dataset.achievementMetricSection !== achievementMetric;
+  });
+
+  document.querySelector("[data-bonus-sentence-category-text]")?.replaceChildren(
+    document.createTextNode(achievementCategory === "grade" ? "成績が" : "テストで"),
+  );
+}
+
+function buildBonusSettingName(formData, child) {
+  const type = String(formData.get("type") || "event");
+  if (type === "event") {
+    return String(formData.get("eventName") || "").trim();
+  }
+
+  const details = buildBonusConditionDetails(formData, child);
+  if (details.category === "grade") {
+    const subject = details.subjectName ? `${details.subjectName} ` : "";
+    return `${subject}成績 ${details.gradeValue}${details.mode === "streak" ? ` ${details.count}回連続達成` : " 達成"}`;
+  }
+
+  const subject = details.subjectName ? `${details.subjectName} ` : "";
+  const metric = details.metric === "rank" ? `${details.rank}位以上` : `${details.score}点以上`;
+  return `${subject}テスト ${metric}${details.mode === "streak" ? ` ${details.count}回連続達成` : " 達成"}`;
+}
+
+function buildBonusConditionType(formData) {
+  const type = String(formData.get("type") || "event");
+  if (type === "event") {
+    return "annual_date";
+  }
+
+  const category = String(formData.get("achievementCategory") || "test");
+  if (category === "grade") {
+    return "achievement_grade";
+  }
+
+  return String(formData.get("achievementMetric") || "score") === "rank" ? "achievement_rank" : "achievement_score";
+}
+
+function buildBonusConditionDetails(formData, child) {
+  const type = String(formData.get("type") || "event");
+  if (type === "event") {
+    const eventDate = parseBonusEventDate(formData);
+    return {
+      month: eventDate.month,
+      day: eventDate.day,
+    };
+  }
+
+  const subjectId = String(formData.get("achievementSubjectId") || "");
+  const subject = getActiveSubjects(child || {}).find((item) => item.id === subjectId);
+  const category = String(formData.get("achievementCategory") || "test");
+  const metric = String(formData.get("achievementMetric") || "score");
+  const mode = String(formData.get("achievementMode") || "single");
+
+  return {
+    category,
+    metric: category === "test" ? metric : "grade",
+    mode,
+    subjectId,
+    subjectName: subject?.name || "",
+    score: Number(formData.get("achievementScore") || 0),
+    rank: Number(formData.get("achievementRank") || 0),
+    gradeValue: String(formData.get("achievementGrade") || "").trim(),
+    count: Number(formData.get("achievementCount") || 0),
+  };
+}
+
+function parseBonusEventDate(formData) {
+  const eventDate = String(formData.get("eventDate") || "");
+  const match = eventDate.match(/^\d{4}-(\d{2})-(\d{2})$/);
+  if (match) {
+    return {
+      month: Number(match[1]),
+      day: Number(match[2]),
+    };
+  }
+
+  return {
+    month: Number(formData.get("eventMonth") || 1),
+    day: Number(formData.get("eventDay") || 0),
+  };
+}
+
+function bonusConditionSummary(conditionType, details) {
+  if (conditionType === "annual_date") {
+    return `${Number(details.month || 1)}月${Number(details.day || 0)}日`;
+  }
+
+  if (conditionType === "achievement_grade") {
+    const subject = details.subjectName ? `${details.subjectName} ` : "";
+    return `${subject}成績で${details.gradeValue}${achievementModeSuffix(details.mode, details.count)}`;
+  }
+
+  const subject = details.subjectName ? `${details.subjectName} ` : "";
+  const target = conditionType === "achievement_rank" ? `${Number(details.rank || 0)}位以上` : `${Number(details.score || 0)}点以上`;
+  return `${subject}${target}${achievementModeSuffix(details.mode, details.count)}`;
+}
+
+function isValidBonusCondition(conditionType, details) {
+  if (conditionType === "annual_date") {
+    return Number(details.month || 0) >= 1 && Number(details.month || 0) <= 12 && Number(details.day || 0) >= 1 && Number(details.day || 0) <= 31;
+  }
+
+  if (conditionType === "achievement_grade") {
+    return Boolean(details.subjectId) && Boolean(details.gradeValue) && Number(details.count || 0) > 0;
+  }
+
+  if (conditionType === "achievement_rank") {
+    return Boolean(details.subjectId) && Number(details.rank || 0) > 0 && Number(details.count || 0) > 0;
+  }
+
+  return Boolean(details.subjectId) && Number(details.score || 0) > 0 && Number(details.count || 0) > 0;
+}
+
+function achievementModeSuffix(mode, count) {
+  return mode === "streak" ? `を${Number(count || 0)}回連続達成` : `を${Number(count || 0)}回達成`;
 }
 
 function bindParentSettings() {
@@ -5130,6 +5504,10 @@ function bindSubjects(child) {
 function bindPointRules(child) {
   bindParentShell();
   bindRedemptionUnitButtons(child);
+  if (seedDefaultOtherTasksIfNeeded(child)) {
+    render();
+    return;
+  }
 
   const subjectTrigger = document.querySelector("#rule-subject-trigger");
   const subjectMenu = document.querySelector("#rule-subject-menu");
@@ -5256,6 +5634,9 @@ function bindPointRules(child) {
   });
 
   document.querySelector("[data-open-other-task-form]")?.addEventListener("click", () => {
+    if (getOtherPointTasks(child).length >= MAX_OTHER_POINT_TASKS) {
+      return;
+    }
     updateChild(child.id, { ruleOtherTaskFormOpen: true, ruleOtherTaskEditingId: "" });
     render();
   });
@@ -5263,35 +5644,6 @@ function bindPointRules(child) {
   document.querySelector("[data-close-other-task-form]")?.addEventListener("click", () => {
     updateChild(child.id, { ruleOtherTaskFormOpen: false, ruleOtherTaskEditingId: "" });
     render();
-  });
-
-  const otherFilterTrigger = document.querySelector("#rule-other-filter-trigger");
-  const otherFilterMenu = document.querySelector("#rule-other-filter-menu");
-  const closeOtherFilterMenu = () => {
-    if (otherFilterMenu) {
-      otherFilterMenu.hidden = true;
-    }
-    otherFilterTrigger?.setAttribute("aria-expanded", "false");
-  };
-  otherFilterTrigger?.addEventListener("click", () => {
-    if (!otherFilterMenu) {
-      return;
-    }
-
-    otherFilterMenu.hidden = !otherFilterMenu.hidden;
-    otherFilterTrigger.setAttribute("aria-expanded", String(!otherFilterMenu.hidden));
-  });
-
-  document.querySelectorAll("[data-rule-other-category-filter]").forEach((button) => {
-    button.addEventListener("click", () => {
-      updateChild(child.id, { ruleOtherCategoryFilter: button.dataset.ruleOtherCategoryFilter || "all" });
-      render();
-    });
-  });
-
-  document.querySelector("[data-open-other-category-modal]")?.addEventListener("click", () => {
-    document.querySelector("#other-task-modal")?.classList.add("is-temporarily-hidden");
-    showOtherTaskCategoryModal(child);
   });
 
   const otherCategoryTrigger = document.querySelector("#other-task-category-trigger");
@@ -5336,14 +5688,6 @@ function bindPointRules(child) {
     closeOtherCategoryMenu();
   });
 
-  document.addEventListener("click", (event) => {
-    if (!otherFilterMenu || otherFilterMenu.hidden || event.target.closest(".rule-other-filter-picker")) {
-      return;
-    }
-
-    closeOtherFilterMenu();
-  });
-
   document.querySelectorAll("[data-edit-other-task]").forEach((button) => {
     button.addEventListener("click", () => {
       updateChild(child.id, { ruleOtherTaskFormOpen: true, ruleOtherTaskEditingId: button.dataset.editOtherTask });
@@ -5379,6 +5723,13 @@ function bindPointRules(child) {
     if (!Number.isFinite(points) || points < 1) {
       if (error) {
         error.textContent = "ポイントは1以上で入力してください。";
+      }
+      return;
+    }
+
+    if (!taskId && getOtherPointTasks(child).length >= MAX_OTHER_POINT_TASKS) {
+      if (error) {
+        error.textContent = `タスクは最大${MAX_OTHER_POINT_TASKS}件までです。`;
       }
       return;
     }
@@ -5566,12 +5917,7 @@ function bindPointRules(child) {
 }
 
 function bindRedemptionUnitButtons(child) {
-  document.querySelectorAll("[data-redemption-unit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      updateChild(child.id, { redemptionUnit: Number(button.dataset.redemptionUnit) });
-      render();
-    });
-  });
+  bindHomeExchangeUnitButtons();
 }
 
 function addTestRuleRow(form) {
@@ -6603,6 +6949,7 @@ function bindChildApply(child, editingApplication = null) {
   const applicationForm = document.querySelector("#application-form");
   const categorySelect = document.querySelector("#application-category");
   const subjectSelect = document.querySelector("#application-subject");
+  const subjectField = subjectSelect?.closest(".field");
   const fullScoreField = document.querySelector("#test-full-score-field");
   const fullScoreSelect = document.querySelector("#test-full-score");
   const testMethodInput = document.querySelector("#test-method");
@@ -6615,6 +6962,8 @@ function bindChildApply(child, editingApplication = null) {
   if (applicationForm) {
     applicationForm.noValidate = true;
   }
+  ensureChildApplyPhotoDesign(editingApplication);
+  ensureChildApplyOtherTaskDropdown(child);
 
   const clearScoreError = () => {
     if (scoreError) {
@@ -6702,6 +7051,7 @@ function bindChildApply(child, editingApplication = null) {
     document.querySelectorAll("[data-apply-section]").forEach((section) => {
       section.classList.toggle("hidden", section.dataset.applySection !== categorySelect.value);
     });
+    subjectField?.classList.toggle("hidden", categorySelect.value === "other");
     syncTestFullScoreField();
     syncTestMethodFields();
     photoInput.required = false;
@@ -6715,6 +7065,19 @@ function bindChildApply(child, editingApplication = null) {
     syncGradeEvaluations();
   });
   applicationForm.addEventListener("click", (event) => {
+    const fullScoreButton = event.target.closest("[data-score-value]");
+    if (fullScoreButton && applicationForm.contains(fullScoreButton)) {
+      event.preventDefault();
+      if (fullScoreSelect && !fullScoreSelect.disabled) {
+        fullScoreSelect.value = fullScoreButton.dataset.scoreValue || "100";
+        fullScoreSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        applicationForm.querySelectorAll("[data-score-value]").forEach((item) => {
+          item.classList.toggle("active", item === fullScoreButton);
+        });
+      }
+      return;
+    }
+
     const button = event.target.closest("[data-child-test-method]");
     if (!button || !applicationForm.contains(button)) {
       return;
@@ -6751,6 +7114,10 @@ function bindChildApply(child, editingApplication = null) {
       subjectId === "__other__"
         ? { id: "__other__", name: "その他" }
         : getActiveSubjects(child).find((item) => item.id === subjectId);
+    const selectedOtherTaskId = String(form.get("otherTaskId") || "");
+    const selectedOtherTask = category === "other"
+      ? getOtherPointTasks(child).find((task) => task.id === selectedOtherTaskId)
+      : null;
     const photoInput = document.querySelector("#application-photos");
     const storedPhotos = window.__studyPaySelectedPhotoFiles?.length
       ? window.__studyPaySelectedPhotoFiles
@@ -6761,6 +7128,11 @@ function bindChildApply(child, editingApplication = null) {
 
     if (!subject) {
       error.textContent = "科目を選んでください。";
+      return;
+    }
+
+    if (category === "other" && !selectedOtherTask) {
+      error.textContent = "タスクを選んでください。";
       return;
     }
 
@@ -6816,8 +7188,9 @@ function bindChildApply(child, editingApplication = null) {
       rank: testMethod === "rank" ? Number(rankText || 0) : null,
       gradeType: category === "grade" ? "grade_5" : "",
       gradeEvaluationId: String(form.get("gradeEvaluationId") || ""),
-      otherContent: String(form.get("otherContent") || "").trim(),
-      requestedPoints: Number(form.get("requestedPoints") || 0) || null,
+      otherTaskId: selectedOtherTask?.id || "",
+      otherContent: selectedOtherTask?.name || "",
+      requestedPoints: selectedOtherTask ? Number(selectedOtherTask.points || 0) : null,
       childComment: String(form.get("childComment") || "").trim(),
       photoNames: nextPhotoNames,
       photos: nextPhotos,
@@ -6930,6 +7303,261 @@ function showDeleteApplicationConfirm(child, applicationId) {
     syncCurrentAccountToCloud();
     closeModal();
     navigate("/child/history");
+  });
+}
+
+function ensureChildApplyPhotoDesign(editingApplication = null) {
+  const photoInput = document.querySelector("#application-photos");
+  const photoField = photoInput?.closest(".field");
+  if (!photoInput || !photoField || photoField.querySelector(".child-photo-drop")) {
+    return;
+  }
+
+  photoField.classList.add("child-photo-field");
+  photoField.querySelector("#photo-help")?.remove();
+  photoInput.classList.add("child-photo-hidden-input");
+  photoInput.dataset.childPhotoInput = "library";
+  photoInput.setAttribute("accept", "image/*");
+  photoInput.setAttribute("multiple", "");
+
+  const cameraInput = document.createElement("input");
+  cameraInput.className = "child-photo-hidden-input";
+  cameraInput.type = "file";
+  cameraInput.accept = "image/*";
+  cameraInput.setAttribute("capture", "environment");
+  cameraInput.dataset.childPhotoInput = "camera";
+  cameraInput.tabIndex = -1;
+
+  const drop = document.createElement("button");
+  drop.className = "child-photo-drop";
+  drop.type = "button";
+  drop.setAttribute("aria-label", "写真を選択");
+  drop.innerHTML = `<span class="child-photo-lucide-icon" aria-hidden="true">${studyPayIcon("camera", "child-photo-svg")}</span>`;
+  photoInput.insertAdjacentElement("afterend", drop);
+
+  const feedback = document.createElement("span");
+  feedback.className = "child-photo-feedback";
+  feedback.setAttribute("aria-live", "polite");
+  drop.insertAdjacentElement("afterend", feedback);
+
+  const preview = document.createElement("div");
+  preview.className = "child-photo-preview";
+  preview.setAttribute("aria-label", "選択した写真");
+  feedback.insertAdjacentElement("afterend", preview);
+
+  const menu = document.createElement("div");
+  menu.className = "child-photo-menu";
+  menu.setAttribute("data-child-photo-menu", "");
+  menu.hidden = true;
+  menu.innerHTML = `
+    <label class="child-photo-menu-action" data-child-photo-action="camera">
+      <span>写真を撮る</span>
+    </label>
+    <label class="child-photo-menu-action" data-child-photo-action="library">
+      <span>写真から選択</span>
+    </label>
+  `;
+  preview.insertAdjacentElement("afterend", menu);
+  menu.querySelector('[data-child-photo-action="camera"]')?.appendChild(cameraInput);
+  menu.querySelector('[data-child-photo-action="library"]')?.appendChild(photoInput);
+
+  window.__studyPayExistingPhotos = [...(editingApplication?.photos || [])];
+  window.__studyPayExistingPhotoNames = [...(editingApplication?.photoNames || [])];
+  window.__studyPaySelectedPhotoFiles = [];
+  photoInput._studyPayExistingPhotos = window.__studyPayExistingPhotos;
+  photoInput._studyPayExistingPhotoNames = window.__studyPayExistingPhotoNames;
+  photoInput._studyPayFiles = window.__studyPaySelectedPhotoFiles;
+
+  const closePhotoMenu = () => {
+    menu.hidden = true;
+  };
+  const renderPreview = async () => {
+    const existingPhotos = (window.__studyPayExistingPhotos || []).map((photo, index) => ({
+      dataUrl: photo.dataUrl,
+      name: photo.name,
+      photoType: "existing",
+      sourceIndex: index,
+    }));
+    const selectedPhotos = await Promise.all(
+      (window.__studyPaySelectedPhotoFiles || []).slice(0, 3).map(
+        (file, index) =>
+          new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve({
+                dataUrl: String(reader.result || ""),
+                name: file.name,
+                photoType: "selected",
+                sourceIndex: index,
+              });
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(file);
+          }),
+      ),
+    );
+    const photos = [...existingPhotos, ...selectedPhotos.filter(Boolean)].slice(0, 3);
+    preview.innerHTML = photos
+      .map(
+        (photo) => `
+          <span class="child-photo-preview-item">
+            <img src="${escapeHtml(photo.dataUrl)}" alt="${escapeHtml(photo.name || "選択した写真")}" />
+            <button class="child-photo-remove-button" type="button" data-photo-type="${escapeHtml(photo.photoType)}" data-photo-index="${Number(photo.sourceIndex)}" aria-label="写真を削除">×</button>
+          </span>
+        `,
+      )
+      .join("");
+    drop.classList.toggle("is-hidden", photos.length > 0);
+    if (photos.length > 0 && photos.length < 3) {
+      preview.insertAdjacentHTML(
+        "beforeend",
+        `<button class="child-photo-preview-add" type="button" data-child-photo-open aria-label="写真を追加">${studyPayIcon("camera", "child-photo-preview-add-icon")}</button>`,
+      );
+    }
+  };
+  const handleInputChange = async (input) => {
+    const incomingFiles = Array.from(input.files || []);
+    if (incomingFiles.length) {
+      const existingCount = (window.__studyPayExistingPhotos || []).length;
+      window.__studyPaySelectedPhotoFiles = [...(window.__studyPaySelectedPhotoFiles || []), ...incomingFiles].slice(
+        0,
+        Math.max(0, 3 - existingCount),
+      );
+      photoInput._studyPayFiles = window.__studyPaySelectedPhotoFiles;
+      input.value = "";
+    }
+    closePhotoMenu();
+    await renderPreview();
+  };
+
+  drop.addEventListener("click", (event) => {
+    event.preventDefault();
+    menu.hidden = !menu.hidden;
+  });
+  document.addEventListener("click", (event) => {
+    if (!photoField.contains(event.target)) {
+      closePhotoMenu();
+    }
+  });
+  photoInput.addEventListener("change", () => handleInputChange(photoInput));
+  cameraInput.addEventListener("change", () => handleInputChange(cameraInput));
+  preview.addEventListener("click", async (event) => {
+    const openButton = event.target.closest("[data-child-photo-open]");
+    if (openButton) {
+      event.preventDefault();
+      menu.hidden = !menu.hidden;
+      return;
+    }
+
+    const removeButton = event.target.closest(".child-photo-remove-button");
+    if (!removeButton) {
+      return;
+    }
+
+    const index = Number(removeButton.dataset.photoIndex);
+    if (removeButton.dataset.photoType === "existing") {
+      window.__studyPayExistingPhotos = (window.__studyPayExistingPhotos || []).filter((_, itemIndex) => itemIndex !== index);
+      window.__studyPayExistingPhotoNames = (window.__studyPayExistingPhotoNames || []).filter((_, itemIndex) => itemIndex !== index);
+      photoInput._studyPayExistingPhotos = window.__studyPayExistingPhotos;
+      photoInput._studyPayExistingPhotoNames = window.__studyPayExistingPhotoNames;
+    } else {
+      window.__studyPaySelectedPhotoFiles = (window.__studyPaySelectedPhotoFiles || []).filter((_, itemIndex) => itemIndex !== index);
+      photoInput._studyPayFiles = window.__studyPaySelectedPhotoFiles;
+    }
+    await renderPreview();
+  });
+
+  renderPreview();
+}
+
+function ensureChildApplyOtherTaskDropdown(child) {
+  const select = document.querySelector("#other-task-id");
+  const field = select?.closest(".field");
+  if (!select || !field) {
+    return;
+  }
+
+  field.classList.add("child-apply-dropdown-field");
+  field.querySelector(".child-apply-dropdown")?.remove();
+
+  const tasks = sortOtherTasksByCategory(getOtherPointTasks(child), getOtherTaskCategories(child));
+  const renderTaskContent = (taskId) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) {
+      const fallback = select.options[select.selectedIndex]?.textContent?.trim() || "";
+      return `<span class="child-task-option-content"><span class="child-task-name">${escapeHtml(fallback)}</span></span>`;
+    }
+
+    const category = getDefaultOtherTaskCategory(task.category || "その他");
+    return `
+      <span class="child-task-option-content">
+        <span class="child-task-category-tag" style="background:${escapeHtml(category.backgroundColor)};color:${escapeHtml(category.textColor || "#ffffff")};">${escapeHtml(category.name)}</span>
+        <span class="child-task-name">${escapeHtml(task.name)}</span>
+        <span class="child-task-points">${Number(task.points || 0).toLocaleString()}pt</span>
+      </span>
+    `;
+  };
+
+  const dropdown = document.createElement("div");
+  dropdown.className = "child-apply-dropdown child-apply-task-dropdown";
+  dropdown.innerHTML = `
+    <button class="child-apply-dropdown-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
+      ${renderTaskContent(select.value)}
+      ${studyPayIcon("chevron-down", "child-apply-dropdown-icon")}
+    </button>
+    <div class="child-apply-dropdown-menu" role="menu" hidden>
+      ${tasks
+        .map(
+          (task) => `
+            <button class="child-apply-dropdown-option ${task.id === select.value ? "active" : ""}" type="button" role="menuitem" data-select-value="${escapeHtml(task.id)}">
+              ${renderTaskContent(task.id)}
+            </button>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+  select.insertAdjacentElement("afterend", dropdown);
+
+  const trigger = dropdown.querySelector(".child-apply-dropdown-trigger");
+  const menu = dropdown.querySelector(".child-apply-dropdown-menu");
+  const closeMenu = () => {
+    if (!menu || !trigger) {
+      return;
+    }
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+  };
+
+  trigger?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const isOpen = !menu.hidden;
+    document.querySelectorAll(".child-apply-dropdown-menu").forEach((item) => {
+      if (item !== menu) {
+        item.hidden = true;
+        item.closest(".child-apply-dropdown")?.querySelector(".child-apply-dropdown-trigger")?.setAttribute("aria-expanded", "false");
+      }
+    });
+    menu.hidden = isOpen;
+    trigger.setAttribute("aria-expanded", String(!isOpen));
+  });
+
+  menu?.querySelectorAll("[data-select-value]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      select.value = button.dataset.selectValue || "";
+      trigger.innerHTML = `${renderTaskContent(select.value)}${studyPayIcon("chevron-down", "child-apply-dropdown-icon")}`;
+      menu.querySelectorAll(".child-apply-dropdown-option").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      closeMenu();
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!field.contains(event.target)) {
+      closeMenu();
+    }
   });
 }
 
@@ -7149,6 +7777,11 @@ function bindParentShell() {
     clearSession();
     navigate("/");
   });
+}
+
+function bindParentExchangeUnitSettings() {
+  bindParentShell();
+  bindHomeExchangeUnitButtons();
 }
 
 function ensureParentPullRefreshIndicator() {
@@ -7558,10 +8191,72 @@ function updateChild(childId, updates) {
   saveAccount(nextParent);
 }
 
+function getChildBonusSettings(child) {
+  if (!Array.isArray(child?.bonusSettings) && child?.id === "child-demo-mana") {
+    return getDemoBonusSettings(new Date());
+  }
+
+  return [...(child?.bonusSettings || [])].sort(
+    (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
+  );
+}
+
+function addBonusSetting({ childId, type, name, condition, conditionType, conditionDetails, points }) {
+  const child = findChild(childId);
+  if (!child) {
+    return;
+  }
+
+  updateChild(childId, {
+    bonusSettings: [
+      ...getChildBonusSettings(child),
+      {
+        id: `bonus-setting-${Date.now()}`,
+        type,
+        name,
+        condition,
+        conditionType,
+        conditionDetails,
+        points: Number(points || 0),
+        status: "active",
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  });
+}
+
+function deleteBonusSetting(childId, settingId) {
+  const child = findChild(childId);
+  if (!child) {
+    return;
+  }
+
+  updateChild(childId, {
+    bonusSettings: getChildBonusSettings(child).filter((setting) => setting.id !== settingId),
+  });
+}
+
 function getOtherPointTasks(child) {
   return [...(child?.otherTasks || [])].sort(
     (a, b) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime(),
   );
+}
+
+function seedDefaultOtherTasksIfNeeded(child) {
+  if (!child || child.defaultOtherTasksSeededAt) {
+    return false;
+  }
+
+  const existingTasks = child.otherTasks || [];
+  const existingKeys = new Set(existingTasks.map((task) => `${task.category || "その他"}:${task.name}`));
+  const defaults = createDefaultOtherPointTasks(new Date()).filter((task) => !existingKeys.has(`${task.category}:${task.name}`));
+  const availableSlots = Math.max(0, MAX_OTHER_POINT_TASKS - existingTasks.length);
+  const tasksToAdd = defaults.slice(0, availableSlots);
+  updateChild(child.id, {
+    otherTasks: [...existingTasks, ...tasksToAdd],
+    defaultOtherTasksSeededAt: new Date().toISOString(),
+  });
+  return true;
 }
 
 function getDefaultOtherTaskCategories() {
@@ -7571,6 +8266,28 @@ function getDefaultOtherTaskCategories() {
     { id: "other-category-life", name: "生活", backgroundColor: "#f1f8ef", textColor: "#3f8f55" },
     { id: "other-category-other", name: "その他", backgroundColor: "#f3eee9", textColor: "#5c3b22" },
   ];
+}
+
+function createDefaultOtherPointTasks(now = new Date()) {
+  const tasks = [
+    ["学習", "宿題をやった"],
+    ["学習", "○○分勉強した"],
+    ["学習", "読書した"],
+    ["お手伝い", "食器を洗った"],
+    ["お手伝い", "洗濯物を畳んだ"],
+    ["お手伝い", "自分の部屋の片付けをした"],
+    ["お手伝い", "ゴミ出しをした"],
+    ["お手伝い", "お風呂を洗った"],
+    ["生活", "朝自分で起きた"],
+    ["生活", "スマホ／ゲームの時間を守った"],
+  ];
+  return tasks.map(([category, name], index) => ({
+    id: `other-task-default-${index + 1}`,
+    category,
+    name,
+    points: 10,
+    createdAt: getDateAfterMinutes(now, index).toISOString(),
+  }));
 }
 
 function getOtherTaskCategoryColorPresets() {
@@ -8332,6 +9049,7 @@ function createDemoChild(now) {
     grantedAt: now.toISOString(),
     canceledAt: null,
   };
+  const demoBonusSettings = getDemoBonusSettings(now);
 
   return {
     id: childId,
@@ -8342,9 +9060,12 @@ function createDemoChild(now) {
     status: "active",
     subjects,
     pointRules: createDemoPointRules(),
-    redemptionUnit: 500,
+    otherTasks: createDefaultOtherPointTasks(now),
+    defaultOtherTasksSeededAt: now.toISOString(),
+    redemptionUnit: 100,
     applications: [englishApplication, mathApplication, japaneseApplication],
     redemptions: [pendingRedemption, completedRedemption],
+    bonusSettings: demoBonusSettings,
     monthlyBonuses: [demoMonthlyBonus],
     pointTransactions: [
       {
@@ -8382,6 +9103,41 @@ function createDemoChild(now) {
     notifications: createDemoChildNotifications(now, approvedAt),
     createdAt: getDateAfterDays(now, -7).toISOString(),
   };
+}
+
+function getDemoBonusSettings(now) {
+  return [
+    {
+      id: "bonus-setting-demo-birthday",
+      type: "event",
+      name: "誕生日",
+      condition: "6月1日",
+      conditionType: "annual_date",
+      conditionDetails: { month: 6, day: 1 },
+      points: 5000,
+      status: "active",
+      createdAt: getDateAfterDays(now, -5).toISOString(),
+    },
+    {
+      id: "bonus-setting-demo-japanese-perfect",
+      type: "achievement",
+      name: "国語 テスト 100点以上 10回連続達成",
+      condition: "国語 100点以上を10回連続達成",
+      conditionType: "achievement_score",
+      conditionDetails: {
+        category: "test",
+        metric: "score",
+        mode: "streak",
+        subjectId: "subject-demo-japanese",
+        subjectName: "国語",
+        score: 100,
+        count: 10,
+      },
+      points: 100,
+      status: "active",
+      createdAt: getDateAfterDays(now, -3).toISOString(),
+    },
+  ];
 }
 
 function createDemoParentNotifications(now) {
@@ -8677,7 +9433,9 @@ function createChild({ nickname, profilePhoto, loginId, password }) {
       status: "active",
     })),
     pointRules: createDefaultPointRules(),
-    redemptionUnit: 1000,
+    otherTasks: createDefaultOtherPointTasks(),
+    defaultOtherTasksSeededAt: new Date().toISOString(),
+    redemptionUnit: 100,
     createdAt: new Date().toISOString(),
   };
 }
@@ -8798,6 +9556,7 @@ function createApplication(child, values) {
     gradeType: values.category === "grade" ? values.gradeType : "",
     gradeEvaluationId: values.category === "grade" ? values.gradeEvaluationId : "",
     gradeValue: values.category === "grade" ? gradeEvaluation?.label || "" : "",
+    otherTaskId: values.category === "other" ? values.otherTaskId || "" : "",
     otherContent: values.category === "other" ? values.otherContent : "",
     requestedPoints: values.category === "other" ? values.requestedPoints : null,
     suggestedPoints,

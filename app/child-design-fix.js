@@ -504,7 +504,7 @@
       ? "再申請"
       : route.startsWith("/child/apply/")
         ? "編集"
-        : "新規登録";
+        : "ポイント申請";
     screen.classList.add("child-apply-design");
     upgradeHeader(screen);
     removeBottomNav(screen);
@@ -513,10 +513,9 @@
     if (pageHeading && !screen.querySelector(".child-apply-hero")) {
       pageHeading.classList.add("child-apply-hero");
       pageHeading.innerHTML = `
-        <button class="child-back-button" type="button" data-route="/child" aria-label="ホームへ戻る">${lucideIcon("chevron-left", "child-back-icon")}</button>
-        <div>
-          <h1>${title}</h1>
-        </div>
+        <span class="child-apply-hero-spacer" aria-hidden="true"></span>
+        <h1>${title}</h1>
+        <button class="child-apply-close-button" type="button" data-route="/child" aria-label="閉じる">${lucideIcon("x", "child-apply-close-icon")}</button>
       `;
     }
 
@@ -537,6 +536,8 @@
     decorateApplyDropdowns(form);
     window.setTimeout(() => decorateApplyDropdowns(form), 0);
     decoratePhotoField(form);
+    window.setTimeout(() => decoratePhotoField(form), 0);
+    window.setTimeout(() => decoratePhotoField(form), 300);
     decorateSubmitArea(form);
 
     const subjectLabel = form.querySelector('label[for="application-subject"]');
@@ -621,12 +622,17 @@
       scoreLabel.textContent = "テストの満点";
     }
 
-    if (scoreField.querySelector(".child-score-options")) {
-      return;
-    }
-
     scoreField.classList.add("child-score-field");
     const select = scoreField.querySelector("#test-full-score");
+    if (!select) {
+      return;
+    }
+    let optionWrap = scoreField.querySelector(".child-score-options");
+    const syncOptionButtons = () => {
+      optionWrap?.querySelectorAll("[data-score-value]").forEach((button) => {
+        button.classList.toggle("active", button.dataset.scoreValue === select.value);
+      });
+    };
     const syncFullScoreVisibility = () => {
       if (getRoute() !== "/child/apply") {
         return;
@@ -638,27 +644,35 @@
       if (!isEnabled) {
         select.value = "100";
       }
+      syncOptionButtons();
     };
-    const options = [
-      ["100", "100点満点"],
-      ["50", "50点満点"],
-    ];
-    const optionWrap = document.createElement("div");
-    optionWrap.className = "child-score-options";
-    optionWrap.innerHTML = options
-      .map(
-        ([value, label]) => `
-          <button class="child-category-option ${select.value === value ? "active" : ""}" type="button" data-score-value="${value}">
-            <span>${escapeText(label)}</span>
-          </button>
-        `,
-      )
-      .join("");
-    scoreField.appendChild(optionWrap);
+
+    if (!optionWrap) {
+      const options = [
+        ["100", "100点満点"],
+        ["50", "50点満点"],
+      ];
+      optionWrap = document.createElement("div");
+      optionWrap.className = "child-score-options";
+      optionWrap.innerHTML = options
+        .map(
+          ([value, label]) => `
+            <button class="child-category-option ${select.value === value ? "active" : ""}" type="button" data-score-value="${value}">
+              <span>${escapeText(label)}</span>
+            </button>
+          `,
+        )
+        .join("");
+      scoreField.appendChild(optionWrap);
+    }
+
     syncFullScoreVisibility();
     form.querySelector("#application-subject")?.addEventListener("change", syncFullScoreVisibility);
+    select.addEventListener("change", syncOptionButtons);
 
-    optionWrap.addEventListener("click", (event) => {
+    if (optionWrap.dataset.fullScoreBound !== "true") {
+      optionWrap.dataset.fullScoreBound = "true";
+      optionWrap.addEventListener("click", (event) => {
       const button = event.target.closest("[data-score-value]");
       if (!button) {
         return;
@@ -672,17 +686,19 @@
       optionWrap.querySelectorAll(".child-category-option").forEach((item) => {
         item.classList.toggle("active", item === button);
       });
-    });
+      });
+    }
   }
 
   function decorateApplyDropdowns(form) {
     bindApplyDropdownRefresh(form);
     decorateApplySelect(form, "#application-subject");
+    decorateApplySelect(form, "#other-task-id");
     decorateApplySelect(form, "#grade-evaluation-id");
   }
 
   function bindApplyDropdownRefresh(form) {
-    ["#application-category", "#application-subject"].forEach((selector) => {
+    ["#application-category", "#application-subject", "#other-task-id"].forEach((selector) => {
       const select = form.querySelector(selector);
       if (!select || select.dataset.childApplyDropdownRefreshBound === "true") {
         return;
@@ -707,17 +723,22 @@
 
     const options = Array.from(select.options);
     const selectedOption = options.find((option) => option.value === select.value) || options[0];
+    const isOtherTaskSelect = selector === "#other-task-id";
+    const renderOptionContent = (option) =>
+      isOtherTaskSelect
+        ? renderOtherTaskDropdownContent(option.value, option.textContent.trim())
+        : `<span>${escapeText(option?.textContent?.trim() || "")}</span>`;
     const dropdown = document.createElement("div");
-    dropdown.className = "child-apply-dropdown";
+    dropdown.className = `child-apply-dropdown ${isOtherTaskSelect ? "child-apply-task-dropdown" : ""}`;
     dropdown.innerHTML = `
       <button class="child-apply-dropdown-trigger" type="button" aria-haspopup="menu" aria-expanded="false">
-        <span>${escapeText(selectedOption?.textContent?.trim() || "")}</span>
+        ${renderOptionContent(selectedOption)}
         ${lucideIcon("chevron-down", "child-apply-dropdown-icon")}
       </button>
       <div class="child-apply-dropdown-menu" role="menu" hidden>
         ${options.map((option) => `
           <button class="child-apply-dropdown-option ${option.value === select.value ? "active" : ""}" type="button" role="menuitem" data-select-value="${escapeText(option.value)}">
-            ${escapeText(option.textContent.trim())}
+            ${renderOptionContent(option)}
           </button>
         `).join("")}
       </div>
@@ -748,7 +769,9 @@
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         select.value = button.dataset.selectValue || "";
-        trigger.querySelector("span").textContent = button.textContent.trim();
+        const selected = Array.from(select.options).find((option) => option.value === select.value) || select.options[0];
+        const icon = trigger.querySelector(".child-apply-dropdown-icon")?.outerHTML || "";
+        trigger.innerHTML = `${renderOptionContent(selected)}${icon}`;
         menu.querySelectorAll(".child-apply-dropdown-option").forEach((item) => {
           item.classList.toggle("active", item === button);
         });
@@ -757,6 +780,27 @@
         window.setTimeout(() => decorateApplyDropdowns(form), 0);
       });
     });
+  }
+
+  function renderOtherTaskDropdownContent(taskId, fallbackText = "") {
+    const child = getCurrentChildData();
+    const task = typeof getOtherPointTasks === "function"
+      ? getOtherPointTasks(child).find((item) => item.id === taskId)
+      : null;
+    if (!task) {
+      return `<span class="child-task-option-content"><span class="child-task-name">${escapeText(fallbackText)}</span></span>`;
+    }
+
+    const category = typeof getDefaultOtherTaskCategory === "function"
+      ? getDefaultOtherTaskCategory(task.category || "その他")
+      : { name: task.category || "その他", backgroundColor: "#ff8200", textColor: "#ffffff" };
+    return `
+      <span class="child-task-option-content">
+        <span class="child-task-category-tag" style="background:${escapeText(category.backgroundColor)};color:${escapeText(category.textColor || "#ffffff")};">${escapeText(category.name)}</span>
+        <span class="child-task-name">${escapeText(task.name)}</span>
+        <span class="child-task-points">${Number(task.points || 0).toLocaleString()}pt</span>
+      </span>
+    `;
   }
 
   function isPointRuleEnabledForCurrentSubject(ruleType) {
@@ -992,7 +1036,7 @@
     }
 
     const route = location.hash.replace("#", "") || "/";
-    submit.textContent = route.startsWith("/child/apply/") ? "変更を保存" : "送信";
+    submit.textContent = route.startsWith("/child/apply/") ? "変更を保存" : "申請する";
     if (form.querySelector(".child-submit-note")) {
       return;
     }
@@ -2304,12 +2348,13 @@
         padding: calc(env(safe-area-inset-top, 0px) + 12px) 20px 12px;
       }
 
-      .child-apply-hero > div {
-        min-width: 0;
-        text-align: center;
+      .child-apply-hero-spacer {
+        display: block;
+        width: 34px;
+        height: 34px;
       }
 
-      .child-back-button {
+      .child-apply-close-button {
         display: grid;
         width: 34px;
         height: 34px;
@@ -2323,23 +2368,19 @@
         font-weight: 800;
       }
 
-      .child-back-icon {
-        width: 24px;
-        height: 24px;
+      .child-apply-close-icon {
+        width: 22px;
+        height: 22px;
         stroke-width: 2.8;
       }
 
-      .child-apply-hero span {
-        color: #ff8200;
-        font-size: 13px;
-        font-weight: 900;
-      }
-
       .child-apply-hero h1 {
+        justify-self: center;
         margin: 0;
         font-size: 22px;
         line-height: 1.25;
         letter-spacing: 0;
+        text-align: center;
       }
 
       .child-apply-hero p {
@@ -2364,6 +2405,10 @@
       .child-apply-card .field {
         display: grid;
         gap: 9px;
+      }
+
+      .child-apply-card .field.hidden {
+        display: none !important;
       }
 
       .child-apply-card label {
@@ -2440,6 +2485,53 @@
         white-space: nowrap;
       }
 
+      .child-apply-task-dropdown .child-apply-dropdown-trigger {
+        min-height: 62px;
+        padding-left: 12px;
+      }
+
+      .child-task-option-content {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        min-width: 0;
+        width: 100%;
+      }
+
+      .child-task-category-tag {
+        display: inline-grid;
+        min-width: 58px;
+        max-width: 74px;
+        min-height: 26px;
+        place-items: center;
+        overflow: hidden;
+        border-radius: 999px;
+        padding: 4px 8px;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .child-task-name {
+        min-width: 0;
+        overflow: hidden;
+        color: #1d1712;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 15px;
+        font-weight: 850;
+      }
+
+      .child-task-points {
+        color: #ff8200;
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+      }
+
       .child-apply-dropdown-icon {
         justify-self: end;
         width: 22px;
@@ -2480,12 +2572,18 @@
         font-weight: 850;
       }
 
+      .child-apply-task-dropdown .child-apply-dropdown-option {
+        min-height: 62px;
+        padding: 0 12px;
+      }
+
       .child-apply-dropdown-option:last-child {
         border-bottom: 0;
       }
 
       .child-apply-dropdown-option.active {
         color: #ff8200;
+        background: #fff8ef;
       }
 
       .child-score-field.hidden {
@@ -2505,14 +2603,14 @@
       }
 
       .child-category-option {
-        display: grid;
+        display: inline-grid;
         place-items: center;
-        min-height: 58px;
-        border: 1px solid #f0dfcf;
-        border-radius: 20px;
-        background: #fffaf5;
-        color: #8d837a;
-        padding: 12px 8px;
+        min-height: 48px;
+        border: 1px solid rgba(234, 216, 189, 0.74);
+        border-radius: 999px;
+        background: #fff;
+        color: #b8ada4;
+        padding: 10px 8px;
         text-align: center;
       }
 
@@ -2530,9 +2628,9 @@
 
       .child-category-option.active {
         border-color: #ff8200;
-        background: #ff8a12;
+        background: #ff8200;
         color: #fff;
-        box-shadow: 0 10px 20px rgba(255, 130, 0, 0.18);
+        box-shadow: none;
       }
 
       .child-category-option.active small {
