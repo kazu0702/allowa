@@ -54,9 +54,11 @@ const state = {
   monthlyBonusSettingFilter: "event",
   parentApplicationsType: "points",
   parentApplicationsFilter: "all",
-  parentNotificationReadFilter: "unread",
+  parentApplicationsFilterTouched: false,
+  parentNotificationReadFilter: "all",
   childHistoryType: "points",
   childHistoryFilter: "all",
+  childHistoryFilterTouched: false,
 };
 const cloudState = {
   enabled: false,
@@ -419,6 +421,7 @@ function navigate(path) {
     state.parentApplicationsType = "points";
     if (!wasPointApplications) {
       state.parentApplicationsFilter = "all";
+      state.parentApplicationsFilterTouched = false;
     }
   }
 
@@ -427,6 +430,7 @@ function navigate(path) {
     state.parentApplicationsType = "allowance";
     if (!wasAllowanceApplications) {
       state.parentApplicationsFilter = "all";
+      state.parentApplicationsFilterTouched = false;
     }
   }
 
@@ -757,6 +761,7 @@ function renderParentRoute(app, route) {
   if (route === "/parent/notifications") {
     app.innerHTML = parentNotificationsView();
     bindParentNotifications();
+    scrollNotificationsToLatest();
     return;
   }
 
@@ -911,6 +916,7 @@ function renderChildRoute(app, route, child) {
   if (route === "/child/notifications") {
     app.innerHTML = childNotificationsView(child);
     bindChildNotifications(child);
+    scrollNotificationsToLatest();
     return;
   }
 
@@ -1384,7 +1390,7 @@ function parentChildStatusValue(value, unit) {
 
 function parentNotificationsView() {
   const parent = loadAccount() || state.parent || initialParent;
-  const readFilter = state.parentNotificationReadFilter || "unread";
+  const readFilter = state.parentNotificationReadFilter || "all";
   const notifications = getParentAnnouncements(parent);
   const visibleNotifications = filterNotificationsByReadState(notifications, readFilter);
   return `
@@ -1392,7 +1398,7 @@ function parentNotificationsView() {
       ${parentSettingsRootHeader("お知らせ")}
 
       <div class="parent-notification-list-head">
-        ${notifications.length ? `<button class="parent-notification-read-all-button" type="button" id="read-parent-notifications">すべて既読にする</button>` : "<span></span>"}
+        ${notifications.length && readFilter !== "read" ? `<button class="parent-notification-read-all-button" type="button" id="read-parent-notifications">すべて既読にする</button>` : "<span></span>"}
         ${parentNotificationReadTabs(readFilter)}
       </div>
 
@@ -1410,8 +1416,9 @@ function getParentAnnouncements(parent) {
 function parentNotificationReadTabs(activeFilter) {
   return `
     <div class="parent-notification-read-tabs" role="tablist" aria-label="お知らせの表示">
-      ${parentNotificationReadTab("unread", "未読", activeFilter)}
+      ${parentNotificationReadTab("all", "すべて", activeFilter)}
       ${parentNotificationReadTab("read", "既読", activeFilter)}
+      ${parentNotificationReadTab("unread", "未読", activeFilter)}
     </div>
   `;
 }
@@ -1451,6 +1458,10 @@ function parentNotificationSource(notification) {
 }
 
 function filterNotificationsByReadState(notifications, readFilter) {
+  if (readFilter === "all") {
+    return notifications;
+  }
+
   return notifications.filter((notification) => (readFilter === "read" ? Boolean(notification.readAt) : !notification.readAt));
 }
 
@@ -1752,14 +1763,19 @@ function parentApplicationsView() {
   const isAllowance = activeType === "allowance";
   const items = isAllowance ? getParentRedemptions() : getParentApplications();
   const pendingItems = items.filter((item) => (isAllowance ? item.redemption.status : item.application.status) === "pending");
-  const activeFilter = normalizeParentApplicationFilter(state.parentApplicationsFilter || "all", activeType);
+  const preferredFilter = getDefaultPendingAwareFilter({
+    currentFilter: state.parentApplicationsFilter,
+    pendingCount: pendingItems.length,
+    touched: state.parentApplicationsFilterTouched,
+  });
+  const activeFilter = normalizeParentApplicationFilter(preferredFilter, activeType);
   state.parentApplicationsFilter = activeFilter;
   const filteredItems = isAllowance ? filterParentRedemptions(items, activeFilter) : filterParentApplications(items, activeFilter);
   return `
     <section class="screen home-screen">
       ${parentSettingsRootHeader("申請一覧")}
       ${parentApplicationTypeTabs(activeType)}
-      ${parentApplicationFilterRow(activeFilter, activeType)}
+      ${parentApplicationFilterRow(activeFilter, activeType, pendingItems.length)}
       <div class="page-heading settings-page-heading">
         <p>確認待ち ${pendingItems.length} 件</p>
       </div>
@@ -1800,12 +1816,12 @@ function parentApplicationTypeTab(value, label, activeType, pendingCount) {
   `;
 }
 
-function parentApplicationFilterRow(activeFilter, activeType = "points") {
+function parentApplicationFilterRow(activeFilter, activeType = "points", pendingCount = 0) {
   const isAllowance = activeType === "allowance";
   return `
     <div class="parent-application-filter-row" aria-label="申請タグ">
       ${parentApplicationFilterButton("all", "すべて", activeFilter)}
-      ${parentApplicationFilterButton("pending", "確認待ち", activeFilter)}
+      ${parentApplicationFilterButton("pending", "確認待ち", activeFilter, pendingCount > 0)}
       ${
         isAllowance
           ? `
@@ -1821,11 +1837,12 @@ function parentApplicationFilterRow(activeFilter, activeType = "points") {
   `;
 }
 
-function parentApplicationFilterButton(value, label, activeFilter) {
+function parentApplicationFilterButton(value, label, activeFilter, hasDot = false) {
   const isActive = value === activeFilter;
   return `
     <button class="filter-${value} ${isActive ? "active" : ""}" type="button" data-parent-application-filter="${value}" aria-pressed="${isActive ? "true" : "false"}">
       ${label}
+      ${hasDot ? `<span class="filter-notification-dot" aria-hidden="true"></span>` : ""}
     </button>
   `;
 }
@@ -2121,9 +2138,8 @@ function parentApplicationCard(child, application) {
           </div>
         </div>
         <div class="application-card-aside">
-          <time datetime="${escapeHtml(application.submittedAt)}">${new Date(application.submittedAt).toLocaleDateString("ja-JP")}</time>
-          <span class="status-pill ${application.status}">${statusLabel(application.status)}</span>
-          <strong>${applicationPointLabel(application)}</strong>
+          <time datetime="${escapeHtml(application.submittedAt)}">${formatJapaneseDateWithWeekday(application.submittedAt)}</time>
+          <strong class="application-card-points ${application.status}">${applicationCardPointLabel(application)}</strong>
         </div>
         ${studyPayIcon("chevron-right", "application-card-chevron")}
       </div>
@@ -2133,9 +2149,13 @@ function parentApplicationCard(child, application) {
 }
 
 function parentApplicationCardTitle(application) {
+  if (application.category === "other") {
+    return escapeHtml(application.otherContent || "その他");
+  }
+
   const category = categoryLabel(application.category);
   const subject = application.subjectName || category;
-  return `${escapeHtml(subject)}（${escapeHtml(category)}）`;
+  return escapeHtml(subject);
 }
 
 function parentApplicationCardSummary(application) {
@@ -2158,7 +2178,19 @@ function parentApplicationCardSummary(application) {
     `;
   }
 
+  if (application.category === "other") {
+    return "";
+  }
+
   return `<p>${applicationSummary(application)}</p>`;
+}
+
+function parentApplicationDetailTitle(application) {
+  if (application.category === "other") {
+    return escapeHtml(application.otherContent || "その他");
+  }
+
+  return `${categoryLabel(application.category)}${application.subjectName ? `・${escapeHtml(application.subjectName)}` : ""}`;
 }
 
 function parentApplicationDetailView(child, application) {
@@ -2177,7 +2209,7 @@ function parentApplicationDetailView(child, application) {
 
       <div class="card detail-card">
         <span class="summary-kicker">申請内容</span>
-        <h2>${categoryLabel(application.category)}${application.subjectName ? `・${escapeHtml(application.subjectName)}` : ""}</h2>
+        <h2>${parentApplicationDetailTitle(application)}</h2>
         <p class="card-copy">${applicationSummary(application)}</p>
         ${application.childComment ? `<p class="card-copy">コメント: ${escapeHtml(application.childComment)}</p>` : ""}
         ${photoThumbnails(application)}
@@ -2192,7 +2224,7 @@ function parentApplicationDetailView(child, application) {
             <option value="other" ${selectedAttr(application.category, "other")}>その他</option>
           </select>
         </div>
-        <div class="field">
+        <div class="field ${application.category === "other" ? "hidden" : ""}">
           <label for="review-subject-name">科目</label>
           <input id="review-subject-name" name="subjectName" value="${escapeHtml(application.subjectName || "その他")}" ${editable ? "" : "readonly"} />
         </div>
@@ -2269,25 +2301,21 @@ function parentRedemptionsView() {
 
 function parentRedemptionCard(child, redemption) {
   return `
-    <div class="card application-card" data-route="/parent/redemptions/${redemption.id}" role="button" tabindex="0">
+    <div class="card application-card redemption-application-card" data-route="/parent/redemptions/${redemption.id}" role="button" tabindex="0">
       <div class="application-card-header">
         <div class="application-card-child">
           ${childAvatar(child, "application-card-avatar")}
           <span class="application-card-child-name">${escapeHtml(child.nickname)}</span>
         </div>
         <div class="application-card-title">
-          <h2>おこづかい申請</h2>
-          <div class="application-card-score-line">
-            <p>
-              <strong class="application-card-score">${redemption.points.toLocaleString()}</strong>
-              <span class="application-card-score-unit"> pt</span>
-            </p>
+          <div class="redemption-flow-line">
+            <strong>${redemption.points.toLocaleString()}<small>pt</small></strong>
+            ${studyPayIcon("move-right", "redemption-flow-icon")}
+            <strong>${redemption.points.toLocaleString()}<small>円</small></strong>
           </div>
         </div>
         <div class="application-card-aside">
-          <time datetime="${escapeHtml(redemption.requestedAt)}">${formatDate(redemption.requestedAt)}</time>
-          <span class="status-pill ${redemption.status}">${redemptionStatusLabel(redemption.status)}</span>
-          <strong>${redemption.points.toLocaleString()}円</strong>
+          <time datetime="${escapeHtml(redemption.requestedAt)}">${formatJapaneseDateWithWeekday(redemption.requestedAt)}</time>
         </div>
         ${studyPayIcon("chevron-right", "application-card-chevron")}
       </div>
@@ -3851,9 +3879,15 @@ function childHistoryView(child) {
   const redemptions = getChildRedemptions(child);
   const activeType = state.childHistoryType || "points";
   const isAllowance = activeType === "allowance";
-  const activeFilter = normalizeChildHistoryFilter(state.childHistoryFilter || "all", activeType);
-  state.childHistoryFilter = activeFilter;
   const items = isAllowance ? redemptions : applications;
+  const pendingCount = items.filter((item) => item.status === "pending").length;
+  const preferredFilter = getDefaultPendingAwareFilter({
+    currentFilter: state.childHistoryFilter,
+    pendingCount,
+    touched: state.childHistoryFilterTouched,
+  });
+  const activeFilter = normalizeChildHistoryFilter(preferredFilter, activeType);
+  state.childHistoryFilter = activeFilter;
   const filteredItems = isAllowance ? filterChildHistoryRedemptions(redemptions, activeFilter) : filterChildHistoryApplications(applications, activeFilter);
   return `
     <section class="screen home-screen child-theme">
@@ -3926,6 +3960,18 @@ function childHistoryFilterButton(value, label, activeFilter) {
       ${label}
     </button>
   `;
+}
+
+function getDefaultPendingAwareFilter({ currentFilter, pendingCount, touched }) {
+  if (!touched && pendingCount > 0 && (!currentFilter || currentFilter === "all")) {
+    return "pending";
+  }
+
+  if (!touched && pendingCount === 0 && currentFilter === "pending") {
+    return "all";
+  }
+
+  return currentFilter || "all";
 }
 
 function filterChildHistoryApplications(applications, filter) {
@@ -4171,12 +4217,20 @@ function pointHistoryCard(transaction) {
 }
 
 function notificationList(notifications, context = {}) {
-  const items = [...notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const items = [...notifications].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  let currentDateKey = "";
   return `
-    <div class="application-list">
+    <div class="application-list notification-list">
       ${
         items.length
-          ? items.map((notification) => notificationCard(notification, context)).join("")
+          ? items.map((notification) => {
+              const dateKey = notificationDateKey(notification.createdAt);
+              const dateLabel = dateKey !== currentDateKey
+                ? `<div class="notification-date-separator">${formatMonthDayWithWeekday(notification.createdAt)}</div>`
+                : "";
+              currentDateKey = dateKey;
+              return `${dateLabel}${notificationCard(notification, context)}`;
+            }).join("")
           : `<div class="notification-empty-state"><strong>お知らせはまだありません</strong></div>`
       }
     </div>
@@ -4201,14 +4255,22 @@ function notificationCard(notification, context = {}) {
         <div class="notification-bubble">
           <div class="notification-title-row">
             <h2>${escapeHtml(notification.title)}</h2>
-            <span class="notification-read-label ${isUnread ? "unread" : "read"}">${isUnread ? "未読" : "既読"}</span>
           </div>
           ${shouldShowMessage && notification.message ? `<p>${escapeHtml(notification.message)}</p>` : ""}
         </div>
-        <div class="notification-time">${formatDate(notification.createdAt)}</div>
+        <span class="notification-read-label ${isUnread ? "unread" : "read"}">${isUnread ? "未読" : "既読"}</span>
       </div>
     </div>
   `;
+}
+
+function scrollNotificationsToLatest() {
+  window.setTimeout(() => {
+    const screen = document.querySelector(".notification-screen");
+    if (screen) {
+      screen.scrollTop = screen.scrollHeight;
+    }
+  }, 0);
 }
 
 function getNotificationChild(notification) {
@@ -4571,12 +4633,14 @@ function bindParentApplications() {
     button.addEventListener("click", () => {
       state.parentApplicationsType = button.dataset.parentApplicationType || "points";
       state.parentApplicationsFilter = Number(button.dataset.pendingCount || 0) > 0 ? "pending" : "all";
+      state.parentApplicationsFilterTouched = false;
       navigate(state.parentApplicationsType === "allowance" ? "/parent/redemptions" : "/parent/applications");
     });
   });
   document.querySelectorAll("[data-parent-application-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.parentApplicationsFilter = button.dataset.parentApplicationFilter || "all";
+      state.parentApplicationsFilterTouched = true;
       render();
     });
   });
@@ -4863,7 +4927,7 @@ function bindParentNotifications() {
   bindNotificationCards();
   document.querySelectorAll("[data-parent-notification-read]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.parentNotificationReadFilter = button.dataset.parentNotificationRead || "unread";
+      state.parentNotificationReadFilter = button.dataset.parentNotificationRead || "all";
       render();
     });
   });
@@ -4931,12 +4995,7 @@ function bindNotificationCards() {
         return;
       }
 
-      updateNotificationReadStateFromCard(card, true);
-      if (card.dataset.notificationOwner === "parent" && card.dataset.notificationRoute) {
-        navigate(card.dataset.notificationRoute);
-        return;
-      }
-
+      updateNotificationReadStateFromCard(card, card.classList.contains("unread"));
       render();
     });
   });
@@ -4946,15 +5005,25 @@ function showNotificationActionMenu(card) {
   const notificationId = card.dataset.notificationId;
   const owner = card.dataset.notificationOwner || "parent";
   const childId = card.dataset.notificationChildId || "";
+  const title = card.querySelector(".notification-title-row h2")?.textContent.trim() || "お知らせ";
+  const message = card.querySelector(".notification-bubble p")?.textContent.trim() || "";
   document.querySelector("#notification-action-menu")?.remove();
   const modal = document.createElement("div");
   modal.className = "notification-action-backdrop";
   modal.id = "notification-action-menu";
   modal.innerHTML = `
-    <div class="notification-action-panel" role="menu" aria-label="お知らせの操作">
-      <button type="button" role="menuitem" data-notification-action="unread">未読にする</button>
-      <button class="danger" type="button" role="menuitem" data-notification-action="delete">削除</button>
-      <button type="button" role="menuitem" data-notification-action="cancel">キャンセル</button>
+    <div class="notification-action-panel" role="dialog" aria-label="お知らせの操作">
+      <div class="notification-action-preview">
+        <div class="notification-action-preview-head">
+          <h2>お知らせ内容</h2>
+        </div>
+        <strong>${escapeHtml(title)}</strong>
+        ${message ? `<p>${escapeHtml(message)}</p>` : ""}
+      </div>
+      <div class="notification-action-buttons">
+        <button class="danger" type="button" data-notification-action="delete">削除</button>
+        <button type="button" data-notification-action="cancel">キャンセル</button>
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
@@ -4967,13 +5036,6 @@ function showNotificationActionMenu(card) {
     }
 
     const action = event.target.dataset.notificationAction;
-    if (action === "unread") {
-      updateNotificationReadState({ owner, childId, notificationId, read: false });
-      closeMenu();
-      render();
-      return;
-    }
-
     if (action === "delete") {
       deleteNotification({ owner, childId, notificationId });
       closeMenu();
@@ -7604,6 +7666,7 @@ function bindChildHistory(child) {
     button.addEventListener("click", () => {
       state.childHistoryType = button.dataset.childHistoryType || "points";
       state.childHistoryFilter = Number(button.dataset.pendingCount || 0) > 0 ? "pending" : "all";
+      state.childHistoryFilterTouched = false;
       render();
       window.dispatchEvent(new CustomEvent("ince:child-rendered"));
     });
@@ -7611,6 +7674,7 @@ function bindChildHistory(child) {
   document.querySelectorAll("[data-child-history-filter]").forEach((button) => {
     button.addEventListener("click", () => {
       state.childHistoryFilter = button.dataset.childHistoryFilter || "all";
+      state.childHistoryFilterTouched = true;
       render();
       window.dispatchEvent(new CustomEvent("ince:child-rendered"));
     });
@@ -9547,8 +9611,8 @@ function createApplication(child, values) {
     applicantType: "child",
     category: values.category,
     status: existingApplication?.status || "pending",
-    subjectId: values.subject?.id || "",
-    subjectName: values.subject?.name || "",
+    subjectId: values.category === "other" ? "" : values.subject?.id || "",
+    subjectName: values.category === "other" ? "" : values.subject?.name || "",
     testMethod: values.category === "test" ? values.testMethod || "score" : "",
     testFullScore: values.category === "test" ? values.testFullScore : null,
     score: values.category === "test" && (values.testMethod || "score") === "score" ? values.score : null,
@@ -10333,6 +10397,43 @@ function formatJapaneseDate(value) {
   return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+function formatJapaneseDateWithWeekday(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日（${weekdays[date.getDay()]}）`;
+}
+
+function formatMonthDayWithWeekday(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+  return `${date.getMonth() + 1}/${date.getDate()}（${weekdays[date.getDay()]}）`;
+}
+
+function notificationDateKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
 function formatDateTime(value) {
   if (!value) {
     return "-";
@@ -10381,6 +10482,11 @@ function applicationPointLabel(application) {
   return points == null ? "おまかせ" : `${points.toLocaleString()}pt`;
 }
 
+function applicationCardPointLabel(application) {
+  const points = application.fixedPoints ?? application.suggestedPoints;
+  return points == null ? "おまかせ" : `${points.toLocaleString()}<small>pt</small>`;
+}
+
 function studyPayIcon(name, className = "") {
   if (window.INCEIcons?.icon) {
     return window.INCEIcons.icon(name, className);
@@ -10398,6 +10504,10 @@ function studyPayIcon(name, className = "") {
     "chevron-left": `<path d="m15 18-6-6 6-6"/>`,
     "chevron-right": `<path d="m9 18 6-6-6-6"/>`,
     "chevron-down": `<path d="m6 9 6 6 6-6"/>`,
+    "move-right": `
+      <path d="M18 8l4 4-4 4"/>
+      <path d="M2 12h20"/>
+    `,
     "circle-alert": `
       <circle cx="12" cy="12" r="10"/>
       <line x1="12" x2="12" y1="8" y2="12"/>

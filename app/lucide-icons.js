@@ -25,6 +25,10 @@
     "chevron-left": `<path d="m15 18-6-6 6-6"/>`,
     "chevron-right": `<path d="m9 18 6-6-6-6"/>`,
     "chevron-down": `<path d="m6 9 6 6 6-6"/>`,
+    "move-right": `
+      <path d="M18 8l4 4-4 4"/>
+      <path d="M2 12h20"/>
+    `,
     history: `
       <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
       <path d="M3 3v5h5"/>

@@ -18,6 +18,8 @@
   --fixed-shell-top: 0px;
   --fixed-header-height: calc(var(--safe-top) + 59px);
   --fixed-header-space: calc(var(--fixed-header-height) + 18px);
+  --notification-header-height: calc(var(--safe-top) + 52px);
+  --bottom-nav-height: calc(54px + 8px + max(8px, var(--safe-bottom)) + 1px);
   --lp-header-height: calc(var(--safe-top) + 74px);
 }
 
@@ -35,7 +37,7 @@ body {
   margin: 0;
   color: var(--text);
   font-family:
-    "Plus Jakarta Sans",
+    "Noto Sans JP",
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
@@ -857,6 +859,10 @@ button {
 .field textarea:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(255, 128, 0, 0.15);
+}
+
+.form .field.hidden {
+  display: none !important;
 }
 
 .field input[readonly] {
@@ -4524,7 +4530,7 @@ button {
 .parent-application-type-badge {
   position: absolute;
   top: -6px;
-  right: 12px;
+  right: 0;
   display: inline-grid;
   min-width: 24px;
   width: 24px;
@@ -4550,6 +4556,7 @@ button {
 }
 
 .parent-application-filter-row button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4564,6 +4571,18 @@ button {
   font-weight: 900;
   text-align: center;
   white-space: nowrap;
+}
+
+.parent-application-filter-row .filter-notification-dot {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #fff;
+  border-radius: 999px;
+  background: #d45b50;
+  box-shadow: 0 3px 8px rgba(212, 91, 80, 0.24);
 }
 
 .parent-application-filter-row .filter-pending {
@@ -4665,12 +4684,13 @@ button {
 .application-card-header {
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) auto 18px;
-  align-items: start;
+  align-items: center;
   gap: 12px;
 }
 
 .application-card-child {
   display: grid;
+  align-self: center;
   gap: 5px;
   justify-items: center;
   min-width: 0;
@@ -4695,6 +4715,10 @@ button {
 }
 
 .application-card-title {
+  display: grid;
+  min-height: 56px;
+  align-content: center;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -4704,11 +4728,51 @@ button {
 }
 
 .application-card-header h2 {
-  margin: 0 0 4px;
+  margin: 0;
 }
 
 .application-card-score-line {
   min-width: 0;
+}
+
+.application-card-score-line:empty {
+  display: none;
+}
+
+.redemption-application-card .application-card-title {
+  min-height: 56px;
+}
+
+.redemption-flow-line {
+  display: inline-grid;
+  grid-template-columns: auto 22px auto;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: start;
+  min-width: 0;
+}
+
+.redemption-flow-line strong {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.redemption-flow-line strong small {
+  margin-left: 2px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.redemption-flow-icon {
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  color: var(--primary);
+  stroke-width: 2.4;
 }
 
 .application-card-score-line p {
@@ -4729,21 +4793,38 @@ button {
 }
 
 .application-card-aside strong {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
   color: var(--primary-dark);
-  font-size: 16px;
+  font-size: 28px;
   font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.application-card-aside strong small {
+  margin-left: 1px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .application-card-aside {
+  position: relative;
   display: grid;
-  gap: 7px;
   justify-items: end;
+  align-self: stretch;
+  min-width: 52px;
+  gap: 7px;
+  text-align: right;
 }
 
 .application-card-aside time {
+  justify-self: end;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 400;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -4751,6 +4832,22 @@ button {
 .application-card-header .status-pill {
   justify-self: end;
   margin-top: 0;
+}
+
+.application-card-points.pending {
+  color: var(--primary-dark);
+}
+
+.application-card-points.approved,
+.application-card-points.completed {
+  color: var(--green);
+}
+
+.application-card-points.returned,
+.application-card-points.rejected,
+.application-card-points.canceled,
+.application-card-points.approval_canceled {
+  color: var(--red);
 }
 
 .application-card-chevron {
@@ -4872,11 +4969,24 @@ button {
 }
 
 .parent-notification-list-head {
+  position: fixed;
+  top: var(--notification-header-height);
+  left: 50%;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 4px 0 8px;
+  width: min(100%, 440px);
+  margin: 0;
+  padding: 4px 18px 8px;
+  transform: translateX(-50%);
+  background: #fff;
+}
+
+.notification-list {
+  margin-top: 50px;
+  padding-bottom: 24px;
 }
 
 .parent-notification-read-all-button {
@@ -4887,14 +4997,14 @@ button {
   color: var(--brown);
   padding: 6px 12px;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
 
 .parent-notification-read-tabs {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(54px, auto));
+  grid-template-columns: repeat(3, minmax(54px, auto));
   gap: 6px;
   padding: 4px;
   border: 1px solid rgba(234, 216, 189, 0.74);
@@ -4910,7 +5020,7 @@ button {
   color: var(--muted);
   padding: 6px 12px;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -4930,6 +5040,11 @@ button {
 .screen.notification-screen,
 .home-screen.child-theme.notification-screen {
   background: #fff;
+}
+
+.screen.home-screen.notification-screen {
+  padding-top: var(--notification-header-height);
+  padding-bottom: var(--bottom-nav-height);
 }
 
 .notification-card {
@@ -4981,21 +5096,23 @@ button {
 
 .notification-message-stack {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: end;
+  gap: 3px;
   min-width: 0;
-  justify-items: start;
+  justify-items: stretch;
 }
 
 .notification-bubble {
   position: relative;
   display: grid;
-  gap: 8px;
+  gap: 3px;
+  width: 100%;
   max-width: 100%;
   border-radius: 4px 18px 18px;
   background: #fff;
   padding: 12px 13px;
   color: var(--text);
-  box-shadow: 0 8px 20px rgba(92, 59, 34, 0.1);
 }
 
 .notification-bubble::before {
@@ -5019,22 +5136,23 @@ button {
 
 .notification-card.unread .notification-bubble {
   background: #fff7e8;
-  box-shadow: 0 8px 20px rgba(244, 123, 32, 0.16);
+}
+
+.notification-card:not(.unread) .notification-bubble {
+  background: #f4f4f4;
 }
 
 .notification-title-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
+  display: block;
+  min-width: 0;
 }
 
 .notification-title-row h2 {
   overflow: hidden;
   margin: 0;
   color: var(--text);
-  font-size: 15px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 400;
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5043,31 +5161,33 @@ button {
 .notification-bubble p {
   margin: 0;
   color: #6a5547;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 400;
   line-height: 1.55;
 }
 
 .notification-read-label {
   display: inline-grid;
+  justify-self: end;
+  align-self: end;
+  min-width: 24px;
   min-height: 22px;
   place-items: center;
-  border-radius: 999px;
-  padding: 4px 8px;
+  padding: 0;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 400;
   line-height: 1;
   white-space: nowrap;
 }
 
 .notification-read-label.unread {
-  background: var(--primary);
-  color: #fff;
+  background: transparent;
+  color: #c9c0b8;
 }
 
 .notification-read-label.read {
-  background: #efe8df;
-  color: #9b8d83;
+  background: transparent;
+  color: #c9c0b8;
 }
 
 .notification-action-button {
@@ -5082,11 +5202,20 @@ button {
   font-weight: 900;
 }
 
-.notification-time {
-  color: var(--muted);
+.notification-date-separator {
+  display: inline-grid;
+  justify-self: center;
+  min-height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: #c9c0b8;
+  color: #fff;
+  padding: 4px 8px;
   font-size: 11px;
-  font-weight: 800;
-  line-height: 1.2;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .notification-action-backdrop {
@@ -5101,29 +5230,73 @@ button {
 
 .notification-action-panel {
   display: grid;
-  gap: 8px;
   width: min(100%, 390px);
   margin: 0 auto;
   border-radius: 18px;
   background: #fff;
-  padding: 10px;
+  padding: 0;
+  overflow: hidden;
   box-shadow: 0 18px 42px rgba(68, 45, 28, 0.22);
+}
+
+.notification-action-preview {
+  display: grid;
+  gap: 6px;
+  padding: 18px 16px 16px;
+}
+
+.notification-action-preview-head {
+  display: block;
+}
+
+.notification-action-preview h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.notification-action-preview strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.notification-action-preview p {
+  margin: 0;
+  color: #6a5547;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+.notification-action-buttons {
+  display: grid;
+  border-top: 1px solid var(--line);
 }
 
 .notification-action-panel button {
   min-height: 48px;
   border: 0;
-  border-radius: 12px;
-  background: #fff7ee;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   color: var(--brown);
   padding: 12px;
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 600;
   text-align: center;
 }
 
+.notification-action-panel button:last-child {
+  border-bottom: 0;
+}
+
 .notification-action-panel button.danger {
-  background: #fff0ec;
+  background: transparent;
   color: var(--red);
 }
 
