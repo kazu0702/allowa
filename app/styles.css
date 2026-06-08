@@ -1916,6 +1916,82 @@ button {
   box-shadow: none;
 }
 
+.parent-redemption-detail-layout {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 10px;
+}
+
+.parent-redemption-detail-child {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.parent-redemption-detail-child > span {
+  overflow: hidden;
+  max-width: 58px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parent-redemption-detail-avatar {
+  width: 50px;
+  height: 50px;
+  color: var(--primary-dark);
+}
+
+.parent-redemption-detail-card {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 0;
+}
+
+.parent-redemption-detail-labels,
+.parent-redemption-detail-values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  text-align: center;
+}
+
+.parent-redemption-detail-labels {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.parent-redemption-detail-values strong {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.parent-redemption-detail-values strong small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.parent-redemption-detail-values strong:last-child {
+  flex-wrap: wrap;
+}
+
 .settings-menu {
   display: grid;
   gap: 0;
@@ -1933,14 +2009,74 @@ button {
   padding: 0 18px;
 }
 
-.child-point-exchange-unit-card {
-  grid-template-columns: 72px minmax(0, 1fr);
+.exchange-setting-child-list {
+  display: grid;
+  gap: 0;
+  margin-top: -8px;
+}
+
+.card.exchange-setting-child-card {
+  display: grid;
+  grid-template-columns: 50px 1fr auto;
+  gap: 16px;
   align-items: center;
-  gap: 14px;
+  justify-items: start;
+  width: 100%;
+  padding: 14px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.card.exchange-setting-child-card > span:not(.child-avatar) {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 18px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exchange-setting-child-avatar {
+  width: 50px;
+  height: 50px;
+  font-size: 25px;
+}
+
+.exchange-setting-child-avatar .profile-avatar-icon {
+  width: 46px;
+  height: 46px;
+}
+
+.exchange-setting-child-chevron {
+  justify-self: end;
+  width: 22px;
+  height: 22px;
+  color: var(--muted);
+}
+
+.child-point-exchange-unit-card {
+  display: grid;
+  gap: 18px;
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   padding: 0 !important;
+}
+
+.exchange-unit-control-row {
+  display: grid;
+  grid-template-columns: auto;
+  align-items: end;
+  justify-content: end;
+  gap: 12px;
+}
+
+.exchange-reward-add-button {
+  min-height: 44px;
+  white-space: nowrap;
 }
 
 .exchange-unit-child-profile {
@@ -1963,18 +2099,18 @@ button {
   display: grid;
   gap: 10px;
   color: var(--text);
-  font-size: 15px;
-  font-weight: 900;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .exchange-unit-input-wrap {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   gap: 8px;
 }
 
 .exchange-unit-input-wrap input {
-  width: 100%;
+  width: 150px;
   min-height: 48px;
   border: 1px solid rgba(234, 216, 189, 0.92);
   border-radius: 14px;
@@ -2004,8 +2140,219 @@ button {
 }
 
 .exchange-unit-error {
-  grid-column: 2;
   margin: 0;
+}
+
+.exchange-items-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.exchange-items-table {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(234, 216, 189, 0.92);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.exchange-items-header,
+.exchange-items-row {
+  display: grid;
+  grid-template-columns: minmax(82px, 1.3fr) 70px 62px 48px 58px;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+}
+
+.exchange-items-header {
+  border-bottom: 1px solid rgba(234, 216, 189, 0.72);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.exchange-items-row + .exchange-items-row {
+  border-top: 1px solid rgba(234, 216, 189, 0.5);
+}
+
+.exchange-item-cell-text {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exchange-item-actions {
+  display: inline-flex;
+  justify-content: end;
+  gap: 2px;
+}
+
+.exchange-item-actions .rule-other-icon-button {
+  width: 26px;
+  height: 26px;
+}
+
+.exchange-item-modal-form {
+  display: grid;
+  gap: 14px;
+}
+
+.exchange-item-modal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 84px;
+  gap: 10px;
+}
+
+.exchange-item-modal-form .rule-edit-field > span {
+  display: block;
+  text-align: center;
+}
+
+.exchange-item-modal-form .rule-edit-field input,
+.exchange-item-modal-form .rule-edit-field select {
+  text-align: center;
+  text-align-last: center;
+}
+
+.exchange-item-unit-field {
+  max-width: 84px;
+}
+
+.exchange-item-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.exchange-item-modal-actions .primary-button {
+  box-shadow: none;
+}
+
+.child-exchange-unit-summary {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(234, 216, 189, 0.72);
+  text-align: center;
+}
+
+.child-exchange-unit-label {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.child-exchange-unit-summary strong {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0;
+  color: var(--primary);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.child-exchange-unit-suffix {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.child-exchange-unit-summary p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+#redemption-form .child-exchange-points-field > label,
+#redemption-form .child-exchange-item-field > label {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.child-exchange-balance {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: var(--text);
+  text-align: center;
+}
+
+.child-exchange-balance > span {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.child-exchange-balance strong {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.child-exchange-balance strong span {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.child-exchange-points-input-wrap {
+  display: inline-grid;
+  grid-template-columns: 150px auto;
+  align-items: center;
+  gap: 10px;
+  justify-content: start;
+}
+
+.child-exchange-points-input-wrap input {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid rgba(234, 216, 189, 0.92);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.child-exchange-points-input-wrap span {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.child-exchange-item-field select {
+  min-height: 50px;
+  border: 1px solid rgba(234, 216, 189, 0.92);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.child-exchange-item-detail {
+  display: block;
+  margin-top: 8px;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .settings-menu .settings-menu-link {
@@ -3496,7 +3843,11 @@ button {
   background: linear-gradient(135deg, #ff8000 0%, #ffb347 100%);
   color: #fff;
   padding: 24px;
-  box-shadow: 0 14px 34px rgba(255, 128, 0, 0.2);
+  box-shadow: 5px 5px 6px rgb(0 0 0 / 40%);
+}
+
+.child-points-card {
+  background: linear-gradient(135deg, #ff8000 0%, #ffb347 100%);
 }
 
 .child-points-card::before,
@@ -3533,6 +3884,7 @@ button {
   display: grid;
   gap: 8px;
   min-width: 0;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
 .child-points-main span,
@@ -3542,11 +3894,16 @@ button {
   opacity: 0.86;
 }
 
+.child-points-main span {
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .child-points-main strong {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px;
+  color: #fff;
   overflow-wrap: anywhere;
   font-size: 52px;
   line-height: 0.95;
@@ -3559,21 +3916,32 @@ button {
 
 .child-points-main p {
   margin: 0;
+  color: rgba(255, 255, 255, 0.86);
   font-size: 12px;
   line-height: 1.45;
   opacity: 0.86;
 }
 
 .child-exchange-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   align-self: center;
   min-height: 48px;
-  border: 1px solid rgba(255, 255, 255, 0.48);
+  border: 1px solid #fff;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--primary);
   padding: 10px 16px;
   font-size: 14px;
   font-weight: 900;
+}
+
+.child-exchange-button-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
 }
 
 .child-points-metrics {
@@ -3587,9 +3955,11 @@ button {
   display: grid;
   gap: 6px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.24);
+  color: #fff;
   padding: 12px;
   backdrop-filter: blur(8px);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
 .child-points-metrics strong {
@@ -3854,13 +4224,25 @@ button {
 
 .child-filter-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
   margin: 0 0 18px;
   padding: 0;
 }
 
+.child-filter-row.is-allowance {
+  grid-template-columns: repeat(2, max-content);
+  gap: 0;
+  width: fit-content;
+  border-radius: 999px;
+  background: #ece8e4;
+  padding: 4px;
+}
+
 .child-filter-row button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3870,11 +4252,44 @@ button {
   border-radius: 999px;
   background: var(--filter-bg, #ece8e4);
   color: var(--filter-color, #574235);
-  padding: 12px 8px;
+  padding: 12px 6px;
   font: inherit;
+  font-size: 14px;
   font-weight: 900;
   text-align: center;
   white-space: nowrap;
+}
+
+.child-filter-row.is-points button {
+  width: 100%;
+}
+
+.child-filter-row.is-allowance button {
+  min-width: 116px;
+  min-height: 42px;
+  background: transparent;
+  color: #8f8176;
+  padding: 10px 16px;
+}
+
+.child-filter-row .filter-notification-dot {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  border: 1px solid #fff;
+  border-radius: 999px;
+  background: #d45b50;
+  box-shadow: 0 3px 8px rgba(212, 91, 80, 0.24);
+}
+
+.child-history-empty-text {
+  margin: 28px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: center;
 }
 
 .child-filter-row .filter-approved {
@@ -3909,6 +4324,11 @@ button {
 
 .child-filter-row button.active {
   background: var(--filter-active, var(--primary-dark));
+  color: #fff;
+}
+
+.child-filter-row.is-allowance button.active {
+  background: var(--primary);
   color: #fff;
 }
 
@@ -3948,11 +4368,20 @@ button {
   padding: 18px;
 }
 
+.child-history-application-header {
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+}
+
 .child-history-content {
   display: grid;
   grid-template-columns: 74px minmax(0, 1fr) auto;
   gap: 14px;
   align-items: start;
+}
+
+.child-history-card:not(.child-home-history-card) .child-history-content {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 .child-history-redemption-content .child-activity-placeholder {
@@ -3961,17 +4390,39 @@ button {
   font-weight: 900;
 }
 
-.child-history-side {
-  display: grid;
-  justify-items: end;
-  gap: 10px;
+.child-history-redemption-content {
+  grid-template-columns: minmax(0, 1fr) 18px;
+}
+
+.child-history-application-header > .application-card-points {
+  justify-self: end;
+  align-self: center;
+  color: var(--primary-dark);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.child-history-points {
-  display: inline-flex;
+.child-history-card .application-card-points small {
+  margin-left: 2px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.child-history-redemption-content .application-card-title {
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
   align-items: center;
-  gap: 5px;
+  gap: 10px;
+}
+
+.child-history-redemption-content .redemption-flow-line {
+  justify-self: end;
+  justify-content: end;
+}
+
+.child-history-points {
+  color: var(--primary-dark);
 }
 
 .child-history-points.is-approved {
@@ -3979,7 +4430,7 @@ button {
 }
 
 .child-history-points.is-pending {
-  color: #b77900;
+  color: var(--primary-dark);
 }
 
 .child-history-points.is-redo {
@@ -3993,6 +4444,14 @@ button {
   line-height: 1.1;
 }
 
+.child-history-test-score {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
 .child-history-point-icon {
   width: 17px;
   height: 17px;
@@ -4000,17 +4459,50 @@ button {
 }
 
 .child-history-main h2 {
-  margin: 0 0 6px;
-  font-size: 19px;
+  margin: 0;
+  font-size: 18px;
   line-height: 1.35;
 }
 
-.child-history-date {
-  display: inline-block;
-  margin-bottom: 8px;
+.child-history-edit-button.application-card-chevron {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  background: transparent;
   color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
+  padding: 0;
+}
+
+.child-history-edit-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.child-history-date {
+  margin: 0;
+}
+
+.application-card-date-chip,
+.application-card-aside time.application-card-date-chip {
+  display: inline-grid;
+  justify-self: end;
+  min-height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: #c9c0b8;
+  color: #fff;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.application-list-date-separator {
+  margin: 4px 0 0;
 }
 
 .child-history-card .child-parent-comment {
@@ -4765,6 +5257,16 @@ button {
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
+}
+
+.redemption-exchange-item-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .redemption-flow-icon {

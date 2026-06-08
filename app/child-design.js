@@ -32,7 +32,7 @@
             <strong>${availablePoints.toLocaleString()}<small>pt</small></strong>
             <p>確定 ${child.currentPoints.toLocaleString()}pt / おこづかい申請中 ${pendingRedemptionPoints.toLocaleString()}pt</p>
           </div>
-          <button class="child-exchange-button" type="button" data-route="/child/redeem">申請する</button>
+          <button class="child-exchange-button" type="button" data-route="/child/exchange">申請する</button>
           <div class="child-points-metrics">
             <div>
               <span>今月の獲得</span>
@@ -118,7 +118,11 @@
               ? `<div class="card empty-state"><strong>まだ申請がありません</strong><p>最初のがんばりを申請してみましょう。</p></div>`
               : filteredApplications.length === 0
                 ? `<div class="card empty-state"><strong>この状態の履歴はありません</strong><p>別の状態を選んで確認できます。</p></div>`
-                : filteredApplications.map(applicationCard).join("")
+                : renderDateGroupedCards(
+                    filteredApplications,
+                    (application) => application.submittedAt,
+                    (application) => applicationCard(application),
+                  )
           }
         </div>
 
@@ -164,34 +168,24 @@
   }
 
   applicationCard = function applicationCardWithDesign(application) {
-    const pointStatus = childApplicationPointStatus(application.status);
-    const scoreLabel = childApplicationScoreLabel(application);
     const canEdit = !childIsApprovedApplicationStatus(application.status);
     return `
       <div class="card application-card child-history-card">
-        <div class="child-history-content">
-          ${applicationMediaPreview(application)}
-          <div class="child-history-main">
-            <h2>${applicationTitle(application)}</h2>
-            <span class="child-history-date">${formatActivityTime(application.submittedAt)}</span>
-            <div class="child-activity-meta">
-              ${applicationCategoryChip(application)}
+        <div class="application-card-header child-history-application-header">
+          <div class="application-card-title child-history-main">
+            <h2>${applicationHistoryTitle(application)}</h2>
+            <div class="application-card-score-line">
+              ${parentApplicationCardSummary(application)}
             </div>
-            ${application.parentComment ? `<p class="child-parent-comment ${childIsRedoApplicationStatus(application.status) ? "is-redo" : ""}">${escapeHtml(application.parentComment)}</p>` : ""}
           </div>
-          <div class="child-history-side">
-            <strong class="child-history-points ${pointStatus.className}">
-              ${childDesignIcon(pointStatus.icon, "child-history-point-icon")}
-              <span>${applicationPointLabel(application)}</span>
-            </strong>
-            ${scoreLabel ? `<span class="child-history-score">${scoreLabel}</span>` : ""}
-            ${
-              canEdit
-                ? `<button class="child-history-edit-button" type="button" data-route="/child/apply/${application.id}" aria-label="申請を編集">${childDesignIcon("square-pen", "child-history-edit-icon")}</button>`
-                : ""
-            }
-          </div>
+          <strong class="application-card-points ${application.status}">${childHistoryPointLabel(application)}</strong>
+          ${
+            canEdit
+              ? `<button class="child-history-edit-button application-card-chevron" type="button" data-route="/child/apply/${application.id}" aria-label="申請を編集">${childDesignIcon("square-pen", "child-history-edit-icon")}</button>`
+              : childDesignIcon("chevron-right", "application-card-chevron")
+          }
         </div>
+        ${application.parentComment ? `<p class="child-parent-comment ${childIsRedoApplicationStatus(application.status) ? "is-redo" : ""}">${escapeHtml(application.parentComment)}</p>` : ""}
       </div>
     `;
   };
@@ -246,7 +240,7 @@
       ["home", "⌂", "ホーム", "/child"],
       ["history", "□", "履歴", "/child/history"],
       ["apply", "+", "申請", "/child/apply"],
-      ["redeem", "¥", "おこづかい申請", "/child/redeem"],
+      ["redeem", "¥", "おこづかい申請", "/child/exchange"],
       ["points", "pt", "ポイント", "/child/points"],
     ];
 
@@ -298,6 +292,14 @@
 
     if (application.category === "grade") {
       return `${escapeHtml(application.subjectName || "成績")}の成績`;
+    }
+
+    return escapeHtml(application.otherContent || "その他の申請");
+  }
+
+  function applicationHistoryTitle(application) {
+    if (application.category === "test" || application.category === "grade") {
+      return escapeHtml(application.subjectName || categoryLabel(application.category));
     }
 
     return escapeHtml(application.otherContent || "その他の申請");
@@ -480,7 +482,7 @@
           <strong>${escapeChildDesignText(pointValue).replace("pt", "<small>pt</small>")}</strong>
           ${finePrint ? `<p>${escapeChildDesignText(finePrint)}</p>` : ""}
         </div>
-        <button class="child-exchange-button" type="button" data-route="/child/redeem">申請する</button>
+        <button class="child-exchange-button" type="button" data-route="/child/exchange">申請する</button>
         <div class="child-points-metrics">
           <div>
             <span>今日の入口</span>
@@ -1038,24 +1040,65 @@
       }
 
       .child-filter-row {
-        display: flex;
-        gap: 10px;
-        overflow-x: auto;
-        margin: 0 -20px 18px;
-        padding: 0 20px 4px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        width: 100%;
+        max-width: 100%;
+        margin: 0 0 18px;
+        padding: 0;
+      }
+
+      .child-filter-row.is-allowance {
+        grid-template-columns: repeat(2, max-content);
+        gap: 0;
+        width: fit-content;
+        border-radius: 999px;
+        background: #ece8e4;
+        padding: 4px;
       }
 
       .child-filter-row button {
-        flex: 0 0 auto;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
         min-height: 46px;
         border: 0;
         border-radius: 999px;
         background: var(--filter-bg, #ece8e4);
         color: var(--filter-color, #574235);
-        padding: 12px 20px;
+        padding: 12px 6px;
         font: inherit;
+        font-size: 14px;
         font-weight: 900;
+        text-align: center;
         white-space: nowrap;
+      }
+
+      .child-filter-row.is-points button {
+        width: 100%;
+      }
+
+      .child-filter-row.is-allowance button {
+        min-width: 116px;
+        min-height: 42px;
+        background: transparent;
+        color: #8f8176;
+        padding: 10px 16px;
+      }
+
+      .child-filter-row .filter-notification-dot {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        width: 12px;
+        height: 12px;
+        border: 1px solid #fff;
+        border-radius: 999px;
+        background: #d45b50;
+        box-shadow: 0 3px 8px rgba(212, 91, 80, 0.24);
       }
 
       .child-filter-row .filter-approved {
@@ -1078,6 +1121,11 @@
 
       .child-filter-row button.active {
         background: var(--filter-active, var(--primary-dark));
+        color: #fff;
+      }
+
+      .child-filter-row.is-allowance button.active {
+        background: var(--primary);
         color: #fff;
       }
 
@@ -1120,6 +1168,10 @@
         padding: 18px;
       }
 
+      .child-history-application-header {
+        grid-template-columns: minmax(0, 1fr) auto 18px;
+      }
+
       .child-history-content {
         display: grid;
         grid-template-columns: 74px minmax(0, 1fr) auto;
@@ -1127,17 +1179,44 @@
         align-items: start;
       }
 
-      .child-history-side {
-        display: grid;
-        justify-items: end;
-        gap: 10px;
+      .child-history-card:not(.child-home-history-card) .child-history-content {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+      }
+
+      .child-history-redemption-content {
+        grid-template-columns: minmax(0, 1fr) 18px;
+      }
+
+      .child-history-application-header > .application-card-points {
+        justify-self: end;
+        align-self: center;
+        color: var(--primary-dark);
+        font-size: 28px;
+        font-weight: 900;
+        line-height: 1;
         white-space: nowrap;
       }
 
-      .child-history-points {
-        display: inline-flex;
+      .child-history-card .application-card-points small {
+        margin-left: 2px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .child-history-redemption-content .application-card-title {
+        grid-template-columns: minmax(0, auto) minmax(0, 1fr);
         align-items: center;
-        gap: 5px;
+        gap: 10px;
+      }
+
+      .child-history-redemption-content .redemption-flow-line {
+        justify-self: end;
+        justify-content: end;
+      }
+
+      .child-history-points {
+        color: var(--primary-dark);
       }
 
       .child-history-points.is-approved {
@@ -1145,7 +1224,7 @@
       }
 
       .child-history-points.is-pending {
-        color: #b77900;
+        color: var(--primary-dark);
       }
 
       .child-history-points.is-redo {
@@ -1159,6 +1238,14 @@
         line-height: 1.1;
       }
 
+      .child-history-test-score {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--text);
+        font-size: 20px;
+        font-weight: 800;
+      }
+
       .child-history-point-icon {
         width: 17px;
         height: 17px;
@@ -1167,30 +1254,45 @@
 
       .child-history-edit-button {
         display: grid;
-        width: 42px;
-        height: 42px;
+        width: 18px;
+        height: 18px;
         place-items: center;
-        border: 1px solid #f0dfcf;
-        border-radius: 14px;
-        background: #fffaf5;
-        color: var(--primary-dark);
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        padding: 0;
       }
 
       .child-history-edit-icon {
-        width: 20px;
-        height: 20px;
+        width: 18px;
+        height: 18px;
       }
 
       .child-history-main h2 {
-        margin: 6px 0 8px;
-        font-size: 19px;
+        margin: 0;
+        font-size: 18px;
         line-height: 1.35;
       }
 
       .child-history-date {
-        color: var(--muted);
-        font-size: 13px;
-        font-weight: 500;
+        margin: 0;
+      }
+
+      .application-card-date-chip,
+      .application-card-aside time.application-card-date-chip {
+        display: inline-grid;
+        justify-self: end;
+        min-height: 22px;
+        place-items: center;
+        border-radius: 999px;
+        background: #c9c0b8;
+        color: #fff;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 900;
+        line-height: 1;
+        text-align: center;
+        white-space: nowrap;
       }
 
       .child-history-card .child-parent-comment {

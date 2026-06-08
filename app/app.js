@@ -9,6 +9,13 @@ const MAX_CHILDREN = 3;
 const MAX_OTHER_POINT_TASKS = 30;
 const DEFAULT_SUBJECTS = ["国語", "算数", "英語"];
 const REDEMPTION_UNITS = [100, 1000, 10000];
+const DEFAULT_EXCHANGE_ITEM_SETTINGS = [
+  { id: "allowance", name: "おこづかい", points: 100, exchangeValue: 100, unit: "円" },
+  { id: "game", name: "ゲーム", points: 100, exchangeValue: 30, unit: "分" },
+  { id: "smartphone", name: "スマホ", points: 100, exchangeValue: 30, unit: "分" },
+];
+const EXCHANGE_ITEM_UNIT_OPTIONS = ["円", "分", "時間", "回", "個"];
+const DEFAULT_EXCHANGE_ITEMS = DEFAULT_EXCHANGE_ITEM_SETTINGS.map((item) => formatExchangeItemLabel(item));
 const MONTHLY_BONUS_REFERENCES = [
   { key: "monthly_cheer", label: "今月の応援ボーナス", suggestionPercent: 5 },
   { key: "habit_cheer", label: "習慣づくりボーナス", suggestionPercent: 10 },
@@ -708,6 +715,7 @@ function isCloudAutoRenderBlockedRoute(route) {
     route === "/child/apply" ||
     route.startsWith("/child/apply/") ||
     route.startsWith("/child/reapply/") ||
+    route === "/child/exchange" ||
     route === "/child/redeem" ||
     route === "/parent/children/new" ||
     route.startsWith("/parent/monthly-bonus") ||
@@ -803,7 +811,15 @@ function renderParentRoute(app, route) {
 
   if (route === "/parent/settings/exchange-unit") {
     app.innerHTML = parentExchangeUnitSettingsView();
-    bindParentExchangeUnitSettings();
+    bindParentShell();
+    return;
+  }
+
+  if (route.startsWith("/parent/settings/exchange-unit/")) {
+    const childId = decodeURIComponent(route.split("/").at(-1) || "");
+    const child = getChildren().find((item) => item.id === childId);
+    app.innerHTML = child ? parentExchangeUnitSettingsDetailView(child) : notFoundView();
+    child ? bindParentExchangeUnitSettings() : bindParentShell();
     return;
   }
 
@@ -927,6 +943,11 @@ function renderChildRoute(app, route, child) {
   }
 
   if (route === "/child/redeem") {
+    navigate("/child/exchange");
+    return;
+  }
+
+  if (route === "/child/exchange") {
     app.innerHTML = childRedeemView(child);
     bindChildRedeem(child);
     return;
@@ -1472,7 +1493,7 @@ function parentSettingsView() {
 
       <div class="settings-menu">
         ${settingsMenuButton("ボーナス設定", "/parent/monthly-bonus")}
-        ${settingsMenuButton("ポイント交換単位", "/parent/settings/exchange-unit")}
+        ${settingsMenuButton("ポイント交換設定", "/parent/settings/exchange-unit")}
         ${settingsMenuButton("プラン・支払い設定", "/parent/billing")}
         ${settingsMenuButton("メールアドレス設定", "/parent/settings/email")}
         ${settingsMenuButton("パスワード変更", "/parent/settings/password")}
@@ -1490,15 +1511,41 @@ function parentSettingsView() {
 
 function parentExchangeUnitSettingsView() {
   const children = getChildren();
+  return `
+    <section class="screen home-screen monthly-bonus-index-screen">
+      ${parentSettingsHeader("ポイント交換設定")}
+
+      ${
+        children.length
+          ? `
+            <div class="exchange-setting-child-list">
+              ${children.map(exchangeSettingChildCard).join("")}
+            </div>
+          `
+          : `<div class="card empty-state"><strong>こどもがまだ登録されていません</strong><p>ポイント交換設定を使うには、先にこどもを追加してください。</p><button class="primary-button compact-button" type="button" data-route="/parent/children/new">こどもを追加する</button></div>`
+      }
+
+      ${bottomNav("settings")}
+    </section>
+  `;
+}
+
+function exchangeSettingChildCard(child) {
+  return `
+    <button class="card exchange-setting-child-card" type="button" data-route="/parent/settings/exchange-unit/${encodeURIComponent(child.id)}">
+      ${childAvatar(child, "exchange-setting-child-avatar")}
+      <span>${escapeHtml(child.nickname)}</span>
+      ${studyPayIcon("chevron-right", "exchange-setting-child-chevron")}
+    </button>
+  `;
+}
+
+function parentExchangeUnitSettingsDetailView(child) {
   return parentSettingsDetailView(
-    "ポイント交換単位",
+    `${child.nickname}のポイント交換設定`,
     `
       <div class="settings-exchange-unit-list">
-        ${
-          children.length
-            ? children.map(childPointExchangeUnitCard).join("")
-            : `<div class="notice-card">こどもを追加すると、ポイント交換単位を設定できます。</div>`
-        }
+        ${childPointExchangeUnitCard(child)}
       </div>
     `,
   );
@@ -1783,10 +1830,14 @@ function parentApplicationsView() {
       <div class="application-list">
         ${
           items.length === 0
-            ? `<div class="card empty-state"><strong>${isAllowance ? "おこづかい申請" : "ポイント申請"}はまだありません</strong><p>こどもから申請されるとここに表示されます。</p></div>`
+            ? `<div class="card empty-state"><strong>${isAllowance ? "交換申請" : "ポイント申請"}はまだありません</strong><p>こどもから申請されるとここに表示されます。</p></div>`
             : filteredItems.length === 0
               ? `<div class="card empty-state"><strong>表示できる申請はありません</strong><p>ほかのタグに切り替えて確認できます。</p></div>`
-              : filteredItems.map((item) => (isAllowance ? parentRedemptionCard(item.child, item.redemption) : parentApplicationCard(item.child, item.application))).join("")
+              : renderDateGroupedCards(
+                  filteredItems,
+                  (item) => (isAllowance ? item.redemption.requestedAt : item.application.submittedAt),
+                  (item) => (isAllowance ? parentRedemptionCard(item.child, item.redemption) : parentApplicationCard(item.child, item.application)),
+                )
         }
       </div>
 
@@ -1800,8 +1851,8 @@ function parentApplicationTypeTabs(activeType) {
   const pendingAllowanceCount = getParentRedemptions().filter((item) => item.redemption.status === "pending").length;
   return `
     <div class="parent-application-type-tabs" role="tablist" aria-label="申請の種類">
-      ${parentApplicationTypeTab("points", "ポイント", activeType, pendingPointCount)}
-      ${parentApplicationTypeTab("allowance", "おこづかい", activeType, pendingAllowanceCount)}
+      ${parentApplicationTypeTab("points", "ポイント申請", activeType, pendingPointCount)}
+      ${parentApplicationTypeTab("allowance", "交換申請", activeType, pendingAllowanceCount)}
     </div>
   `;
 }
@@ -1825,7 +1876,7 @@ function parentApplicationFilterRow(activeFilter, activeType = "points", pending
       ${
         isAllowance
           ? `
-            ${parentApplicationFilterButton("completed", "支給済み", activeFilter)}
+            ${parentApplicationFilterButton("completed", "承認済み", activeFilter)}
             ${parentApplicationFilterButton("rejected", "却下", activeFilter)}
           `
           : `
@@ -1845,6 +1896,26 @@ function parentApplicationFilterButton(value, label, activeFilter, hasDot = fals
       ${hasDot ? `<span class="filter-notification-dot" aria-hidden="true"></span>` : ""}
     </button>
   `;
+}
+
+function renderDateGroupedCards(items, getDate, renderCard) {
+  const sortedItems = [...items].sort((a, b) => {
+    const firstDate = new Date(getDate(a)).getTime();
+    const secondDate = new Date(getDate(b)).getTime();
+    return firstDate - secondDate;
+  });
+  let currentDateKey = "";
+
+  return sortedItems.map((item) => {
+    const dateValue = getDate(item);
+    const dateKey = notificationDateKey(dateValue);
+    const dateLabel = formatMonthDayWithWeekday(dateValue);
+    const dateHeading = dateKey && dateKey !== currentDateKey
+      ? `<div class="notification-date-separator application-list-date-separator">${dateLabel}</div>`
+      : "";
+    currentDateKey = dateKey || currentDateKey;
+    return `${dateHeading}${renderCard(item)}`;
+  }).join("");
 }
 
 function normalizeParentApplicationFilter(filter, activeType) {
@@ -2138,7 +2209,6 @@ function parentApplicationCard(child, application) {
           </div>
         </div>
         <div class="application-card-aside">
-          <time datetime="${escapeHtml(application.submittedAt)}">${formatJapaneseDateWithWeekday(application.submittedAt)}</time>
           <strong class="application-card-points ${application.status}">${applicationCardPointLabel(application)}</strong>
         </div>
         ${studyPayIcon("chevron-right", "application-card-chevron")}
@@ -2198,7 +2268,7 @@ function parentApplicationDetailView(child, application) {
   const canCancelApproval = application.status === "approved" && getAvailablePoints(child) >= Number(application.fixedPoints || 0);
   return `
     <section class="screen home-screen">
-      ${parentHeader("申請詳細")}
+      ${parentPlainHeader("ポイント申請内容", "/parent/applications", "申請一覧に戻る")}
       <div class="page-heading">
         <div>
           <h1>${escapeHtml(child.nickname)}の申請</h1>
@@ -2290,7 +2360,11 @@ function parentRedemptionsView() {
         ${
           items.length === 0
             ? `<div class="card empty-state"><strong>おこづかい申請はまだありません</strong><p>こどもから申請されるとここに表示されます。</p></div>`
-            : items.map(({ child, redemption }) => parentRedemptionCard(child, redemption)).join("")
+            : renderDateGroupedCards(
+                items,
+                (item) => item.redemption.requestedAt,
+                ({ child, redemption }) => parentRedemptionCard(child, redemption),
+              )
         }
       </div>
 
@@ -2300,6 +2374,7 @@ function parentRedemptionsView() {
 }
 
 function parentRedemptionCard(child, redemption) {
+  const exchangeInfo = getRedemptionExchangeInfo(child, redemption);
   return `
     <div class="card application-card redemption-application-card" data-route="/parent/redemptions/${redemption.id}" role="button" tabindex="0">
       <div class="application-card-header">
@@ -2308,15 +2383,14 @@ function parentRedemptionCard(child, redemption) {
           <span class="application-card-child-name">${escapeHtml(child.nickname)}</span>
         </div>
         <div class="application-card-title">
+          <span class="redemption-exchange-item-name">${escapeHtml(exchangeInfo.name)}</span>
           <div class="redemption-flow-line">
             <strong>${redemption.points.toLocaleString()}<small>pt</small></strong>
             ${studyPayIcon("move-right", "redemption-flow-icon")}
-            <strong>${redemption.points.toLocaleString()}<small>円</small></strong>
+            <strong>${Number(exchangeInfo.exchangeValue || 0).toLocaleString()}<small>${escapeHtml(exchangeInfo.unit)}</small></strong>
           </div>
         </div>
-        <div class="application-card-aside">
-          <time datetime="${escapeHtml(redemption.requestedAt)}">${formatJapaneseDateWithWeekday(redemption.requestedAt)}</time>
-        </div>
+        <div class="application-card-aside"></div>
         ${studyPayIcon("chevron-right", "application-card-chevron")}
       </div>
     </div>
@@ -2638,28 +2712,34 @@ function monthlyBonusCard(bonus) {
 function parentRedemptionDetailView(child, redemption) {
   const editable = redemption.status === "pending";
   const cancelable = redemption.status === "completed";
+  const exchangeInfo = getRedemptionExchangeInfo(child, redemption);
   return `
     <section class="screen home-screen">
-      ${parentHeader("おこづかい詳細")}
-      <div class="page-heading">
-        <div>
-          <h1>${escapeHtml(child.nickname)}のおこづかい申請</h1>
-          <p>${redemptionStatusLabel(redemption.status)}・${formatDate(redemption.requestedAt)}</p>
-        </div>
-        <button class="secondary-button small-action" type="button" data-route="/parent/redemptions">一覧</button>
-      </div>
+      ${parentPlainHeader("交換申請内容", "/parent/redemptions", "申請一覧に戻る")}
 
-      <div class="card detail-card">
-        <span class="summary-kicker">申請ポイント</span>
-        <div class="summary-number">${redemption.points.toLocaleString()}pt</div>
-        <p class="card-copy">1pt = 1円として、おこづかい支給後に完了してください。申請中ポイントはすでに利用可能ポイントから仮で差し引かれています。</p>
+      <div class="parent-redemption-detail-layout">
+        <div class="parent-redemption-detail-child">
+          ${childAvatar(child, "parent-redemption-detail-avatar")}
+          <span>${escapeHtml(child.nickname)}</span>
+        </div>
+
+        <div class="card detail-card parent-redemption-detail-card">
+          <div class="parent-redemption-detail-labels">
+            <span>ポイント</span>
+            <span>${escapeHtml(exchangeInfo.name)}</span>
+          </div>
+          <div class="parent-redemption-detail-values">
+            <strong>${redemption.points.toLocaleString()}<small>pt</small></strong>
+            <strong>${escapeHtml(formatExchangeResultLabel(exchangeInfo))}</strong>
+          </div>
+        </div>
       </div>
 
       ${
         editable
           ? `
             <div class="card detail-card">
-              <button class="primary-button" type="button" id="complete-redemption">支給済みにして完了</button>
+              <button class="primary-button" type="button" id="complete-redemption">承認する</button>
               <button class="danger-button" type="button" id="reject-redemption">却下</button>
             </div>
           `
@@ -2671,7 +2751,7 @@ function parentRedemptionDetailView(child, redemption) {
                 <button class="danger-button" type="button" id="cancel-completed-redemption">完了を取り消す</button>
               </div>
             `
-            : `<div class="notice-card">このおこづかい申請は処理済みです。</div>`
+            : `<div class="notice-card">この交換申請は処理済みです。</div>`
       }
 
       ${bottomNav("redemptions")}
@@ -3253,20 +3333,158 @@ function otherTaskCategoryTag(category) {
 }
 
 function childPointExchangeUnitCard(child) {
-  const unit = Number(child.redemptionUnit || 100);
+  const exchangeItems = getChildExchangeItemSettings(child);
   return `
     <div class="card detail-card child-point-exchange-unit-card" data-exchange-unit-child-id="${escapeHtml(child.id)}">
-      <div class="exchange-unit-child-profile">
-        ${childAvatar(child, "exchange-unit-avatar")}
-        <span>${escapeHtml(child.nickname)}</span>
+      <div class="exchange-unit-control-row">
+        <button class="primary-button compact-button exchange-reward-add-button" type="button" data-add-exchange-item>ごほうび追加</button>
       </div>
-      <label class="exchange-unit-field" for="exchange-unit-${escapeHtml(child.id)}">
-        <span class="exchange-unit-input-wrap">
-          <input id="exchange-unit-${escapeHtml(child.id)}" name="redemptionUnit" inputmode="numeric" value="${escapeHtml(String(unit))}" data-redemption-unit-input />
-          <span>pt</span>
-        </span>
-      </label>
+      <div class="exchange-items-field">
+        <div class="exchange-items-table" role="table" aria-label="${escapeHtml(child.nickname)}のポイント交換設定">
+          <div class="exchange-items-header" role="row">
+            <span>交換するもの</span>
+            <span>pt交換単位</span>
+            <span>金額／数量／時間</span>
+            <span>単位</span>
+            <span aria-label="操作"></span>
+          </div>
+          ${exchangeItems.map((item, index) => exchangeItemSettingRow(child, item, index)).join("")}
+        </div>
+      </div>
       <p class="error exchange-unit-error" aria-live="polite"></p>
+    </div>
+  `;
+}
+
+function getChildExchangeItems(child) {
+  return getChildExchangeItemSettings(child).map(formatExchangeItemLabel);
+}
+
+function getChildExchangeItemSettings(child) {
+  const unit = Number(child?.redemptionUnit || 100);
+  const sourceItems = Array.isArray(child?.exchangeItems) ? child.exchangeItems : [];
+  const items = sourceItems.map((item, index) => normalizeExchangeItemSetting(item, index, unit)).filter(Boolean);
+  return items.length ? items : DEFAULT_EXCHANGE_ITEM_SETTINGS.map((item) => ({ ...item }));
+}
+
+function normalizeExchangeItemSetting(item, index, unit) {
+  if (item && typeof item === "object") {
+    const name = String(item.name || item.label || "").trim();
+    if (!name) {
+      return null;
+    }
+    return {
+      id: String(item.id || `exchange-item-${index + 1}`),
+      name,
+      points: normalizePositiveNumber(item.points, unit),
+      exchangeValue: normalizePositiveNumber(item.exchangeValue, item.value ?? unit),
+      unit: String(item.unit || "円").trim() || "円",
+    };
+  }
+
+  const label = String(item || "").trim();
+  if (!label) {
+    return null;
+  }
+
+  if (label.includes("ゲーム")) {
+    return { id: `exchange-item-${index + 1}`, name: "ゲーム", points: unit, exchangeValue: 30, unit: "分" };
+  }
+
+  if (label.includes("スマホ")) {
+    return { id: `exchange-item-${index + 1}`, name: "スマホ", points: unit, exchangeValue: 30, unit: "分" };
+  }
+
+  return { id: `exchange-item-${index + 1}`, name: label, points: unit, exchangeValue: unit, unit: "円" };
+}
+
+function normalizePositiveNumber(value, fallback) {
+  const number = Number(String(value ?? "").replaceAll(",", ""));
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : Number(fallback || 1);
+}
+
+function formatExchangeItemLabel(item) {
+  if (!item || typeof item !== "object") {
+    return String(item || "").trim();
+  }
+
+  if (String(item.unit || "") === "分") {
+    return `${item.name}${toFullWidthNumber(item.exchangeValue)}分`;
+  }
+
+  return String(item.name || "").trim();
+}
+
+function formatExchangeItemDetail(item) {
+  if (!item || typeof item !== "object") {
+    return "";
+  }
+
+  return `${Number(item.points).toLocaleString()}ポイント　→　${Number(item.exchangeValue).toLocaleString()} ${item.unit}`;
+}
+
+function calculateExchangeValueForPoints(item, points) {
+  const pointUnit = Number(item?.points || 0);
+  const exchangeValue = Number(item?.exchangeValue || 0);
+  const requestPoints = Number(points || 0);
+  if (!pointUnit || !exchangeValue || !requestPoints) {
+    return exchangeValue || requestPoints;
+  }
+
+  return (requestPoints / pointUnit) * exchangeValue;
+}
+
+function getRedemptionExchangeInfo(child, redemption) {
+  const items = getChildExchangeItemSettings(child);
+  const savedName = String(redemption?.itemName || "").trim();
+  const savedInfo = {
+    name: savedName,
+    points: Number(redemption?.points || 0),
+    exchangeValue: Number(redemption?.exchangeValue || 0),
+    unit: String(redemption?.exchangeUnit || "").trim(),
+  };
+  const matchedItem = items.find((item) =>
+    item.name === savedName || formatExchangeItemLabel(item) === savedName
+  );
+  const base = matchedItem || null;
+  return {
+    name: savedInfo.name || base?.name || "交換",
+    points: savedInfo.points || Number(base?.points || 0),
+    exchangeValue: savedInfo.exchangeValue || calculateExchangeValueForPoints(base, savedInfo.points),
+    unit: savedInfo.unit || base?.unit || "円",
+  };
+}
+
+function formatExchangeResultLabel(info) {
+  if (!info) {
+    return "";
+  }
+
+  return `${Number(info.exchangeValue || 0).toLocaleString()} ${info.unit || ""}`.trim();
+}
+
+function formatExchangeHistoryTitle(info) {
+  const name = String(info?.name || "").trim();
+  return name && name !== "交換" ? `${name}交換申請` : "交換申請";
+}
+
+function toFullWidthNumber(value) {
+  return String(value).replace(/[0-9]/g, (char) => String.fromCharCode(char.charCodeAt(0) + 0xfee0));
+}
+
+function exchangeItemSettingRow(child, item, index) {
+  const label = formatExchangeItemLabel(item) || "交換するもの";
+  return `
+    <div class="exchange-items-row" role="row" data-exchange-item-row="${index}">
+      <span class="exchange-item-cell-text">${escapeHtml(item.name)}</span>
+      <span class="exchange-item-cell-text">${Number(item.points).toLocaleString()}</span>
+      <span class="exchange-item-cell-text">${Number(item.exchangeValue).toLocaleString()}</span>
+      <span class="exchange-item-cell-text">${escapeHtml(item.unit)}</span>
+      <span class="exchange-item-actions">
+        <button class="rule-other-icon-button" type="button" data-edit-exchange-item="${index}" aria-label="${escapeHtml(label)}を編集">
+          ${studyPayIcon("square-pen", "rule-subject-action-icon")}
+        </button>
+      </span>
     </div>
   `;
 }
@@ -3546,7 +3764,7 @@ function childHomeView(child) {
           <strong>${availablePoints.toLocaleString()}<small>pt</small></strong>
           <p>確定 ${child.currentPoints.toLocaleString()}pt / おこづかい申請中 ${pendingRedemptionPoints.toLocaleString()}pt</p>
         </div>
-        <button class="child-exchange-button" type="button" data-route="/child/redeem">申請する</button>
+          <button class="child-exchange-button" type="button" data-route="/child/exchange">申請する</button>
         <div class="child-points-metrics">
           <div>
             <span>今月の獲得</span>
@@ -3643,58 +3861,48 @@ function childNotificationsView(child) {
 function childRedeemView(child) {
   const flashMessage = state.flash;
   state.flash = "";
-  const unit = child.redemptionUnit || 100;
-  const pendingRedemptionPoints = getPendingRedemptionPoints(child);
   const availablePoints = getAvailablePoints(child);
-  const maxUnits = Math.floor(availablePoints / unit);
-  const options = Array.from({ length: maxUnits }, (_, index) => unit * (index + 1));
-  const redemptions = getChildRedemptions(child);
-  const receivedAllowanceTotal = getMonthlyReceivedAllowanceTotal(child);
+  const exchangeItems = getChildExchangeItemSettings(child);
+  const firstExchangeItem = exchangeItems[0] || null;
+  const canExchange = exchangeItems.some((item) => availablePoints >= Number(item.points || 0));
   return `
     <section class="screen home-screen child-theme">
-      ${childHeader("おこづかい")}
+      ${childHeader("ポイント交換")}
       <div class="page-heading">
         <div>
-          <h1>おこづかい申請</h1>
-          <p>ポイントをおこづかいとして申請します。</p>
+          <h1>ポイント交換</h1>
         </div>
       </div>
-
-      <div class="card summary-card">
-        <span class="summary-kicker">現在ポイント</span>
-        <div class="summary-number">${availablePoints.toLocaleString()}pt</div>
-        <p class="fine-print">確定 ${child.currentPoints.toLocaleString()}pt / 申請中 ${pendingRedemptionPoints.toLocaleString()}pt</p>
-      </div>
-
-      <div class="card summary-card">
-        <span class="summary-kicker">今月もらったおこづかい</span>
-        <div class="summary-number">${receivedAllowanceTotal.toLocaleString()}円</div>
-      </div>
-
       <form class="card form form-card" id="redemption-form">
         ${flashMessage ? `<div class="success">${escapeHtml(flashMessage)}</div>` : ""}
-        <div class="field">
-          <label for="redemption-points">おこづかい申請ポイント</label>
-          <select id="redemption-points" name="points" ${options.length ? "" : "disabled"}>
-            ${options.map((points) => `<option value="${points}">${points.toLocaleString()}pt</option>`).join("")}
+        <div class="child-exchange-balance">
+          <span>現在のポイント残高</span>
+          <strong>${availablePoints.toLocaleString()}<span>ポイント</span></strong>
+        </div>
+        <div class="field child-exchange-item-field">
+          <label for="redemption-item">交換するもの</label>
+          <select id="redemption-item" name="itemName" ${canExchange ? "" : "disabled"}>
+            ${exchangeItems.map((item, index) => {
+              const label = String(item.name || "").trim();
+              return `<option value="${escapeHtml(label)}" data-exchange-item-index="${index}">${escapeHtml(label)}</option>`;
+            }).join("")}
           </select>
-          <span class="field-help">設定単位: ${unit.toLocaleString()}pt</span>
+          <span class="child-exchange-item-detail" id="exchange-item-detail">${escapeHtml(formatExchangeItemDetail(firstExchangeItem))}</span>
+        </div>
+        <div class="field child-exchange-points-field">
+          <label for="redemption-points">交換ポイント</label>
+          <span class="child-exchange-points-input-wrap">
+            <input id="redemption-points" name="points" inputmode="numeric" autocomplete="off" ${canExchange ? "" : "disabled"} />
+            <span>ポイント</span>
+          </span>
         </div>
         <div class="error" id="redemption-error"></div>
         ${
-          options.length
-            ? `<button class="primary-button" type="submit">おこづかい申請する</button>`
-            : `<div class="notice-card">おこづかい申請できるポイントがまだ足りません。</div>`
+          canExchange
+            ? `<button class="primary-button" type="submit">申請する</button>`
+            : `<div class="notice-card">交換できるポイントがまだ足りません。</div>`
         }
       </form>
-
-      <div class="application-list section-tight">
-        ${
-          redemptions.length
-            ? redemptions.map(redemptionCard).join("")
-            : `<div class="card empty-state"><strong>おこづかい申請はまだありません</strong><p>ポイントが貯まったら申請できます。</p></div>`
-        }
-      </div>
 
       ${childBottomNav("redeem")}
     </section>
@@ -3880,11 +4088,17 @@ function childHistoryView(child) {
   const activeType = state.childHistoryType || "points";
   const isAllowance = activeType === "allowance";
   const items = isAllowance ? redemptions : applications;
-  const pendingCount = items.filter((item) => item.status === "pending").length;
+  const pendingCount = isAllowance
+    ? redemptions.filter((redemption) => redemption.status === "pending").length
+    : applications.filter((application) => application.status === "pending").length;
+  const redoCount = isAllowance
+    ? 0
+    : applications.filter((application) => ["returned", "rejected", "canceled"].includes(application.status)).length;
   const preferredFilter = getDefaultPendingAwareFilter({
     currentFilter: state.childHistoryFilter,
-    pendingCount,
+    pendingCount: pendingCount + redoCount,
     touched: state.childHistoryFilterTouched,
+    fallbackFilter: isAllowance ? "pending" : "approved",
   });
   const activeFilter = normalizeChildHistoryFilter(preferredFilter, activeType);
   state.childHistoryFilter = activeFilter;
@@ -3895,14 +4109,18 @@ function childHistoryView(child) {
         <h1>履歴</h1>
       </div>
       ${childHistoryTypeTabs(child, activeType)}
-      ${childHistoryFilterRow(activeFilter, activeType)}
+      ${childHistoryFilterRow(activeFilter, activeType, { pendingCount, redoCount })}
       <div class="application-list">
         ${
           items.length === 0
-            ? `<div class="card empty-state"><strong>${isAllowance ? "おこづかい申請" : "申請"}はまだありません</strong><p>${isAllowance ? "ポイントが貯まったら申請できます。" : "最初のがんばりを申請してみましょう。"}</p></div>`
+            ? `<p class="child-history-empty-text">履歴なし</p>`
             : filteredItems.length === 0
-              ? `<div class="card empty-state"><strong>この状態の履歴はありません</strong><p>別の状態を選んで確認できます。</p></div>`
-              : filteredItems.map((item) => (isAllowance ? childHistoryRedemptionCard(item) : applicationCard(item))).join("")
+              ? `<p class="child-history-empty-text">履歴なし</p>`
+              : renderDateGroupedCards(
+                  filteredItems,
+                  (item) => (isAllowance ? item.requestedAt : item.submittedAt),
+                  (item) => (isAllowance ? childHistoryRedemptionCard(child, item) : applicationCard(item)),
+                )
         }
       </div>
 
@@ -3913,11 +4131,12 @@ function childHistoryView(child) {
 
 function childHistoryTypeTabs(child, activeType) {
   const pendingApplicationCount = getChildApplications(child).filter((application) => application.status === "pending").length;
+  const redoApplicationCount = getChildApplications(child).filter((application) => ["returned", "rejected", "canceled"].includes(application.status)).length;
   const pendingRedemptionCount = getChildRedemptions(child).filter((redemption) => redemption.status === "pending").length;
   return `
     <div class="child-history-type-tabs" role="tablist" aria-label="履歴の種類">
-      ${childHistoryTypeTab("points", "ポイント", activeType, pendingApplicationCount)}
-      ${childHistoryTypeTab("allowance", "おこづかい", activeType, pendingRedemptionCount)}
+      ${childHistoryTypeTab("points", "ポイント", activeType, pendingApplicationCount + redoApplicationCount)}
+      ${childHistoryTypeTab("allowance", "交換", activeType, pendingRedemptionCount)}
     </div>
   `;
 }
@@ -3932,46 +4151,46 @@ function childHistoryTypeTab(value, label, activeType, pendingCount) {
   `;
 }
 
-function childHistoryFilterRow(activeFilter, activeType = "points") {
+function childHistoryFilterRow(activeFilter, activeType = "points", counts = {}) {
   const isAllowance = activeType === "allowance";
   return `
-    <div class="child-filter-row" aria-label="申請状態">
-      ${childHistoryFilterButton("all", "すべて", activeFilter)}
-      ${childHistoryFilterButton("pending", "確認中", activeFilter)}
+    <div class="child-filter-row ${isAllowance ? "is-allowance" : "is-points"}" aria-label="申請状態">
       ${
         isAllowance
           ? `
-            ${childHistoryFilterButton("completed", "支給済み", activeFilter)}
-            ${childHistoryFilterButton("rejected", "却下", activeFilter)}
+            ${childHistoryFilterButton("completed", "受け取り済み", activeFilter)}
+            ${childHistoryFilterButton("pending", "確認待ち", activeFilter, Number(counts.pendingCount || 0) > 0)}
           `
           : `
             ${childHistoryFilterButton("approved", "承認済み", activeFilter)}
-            ${childHistoryFilterButton("redo", "やり直し", activeFilter)}
+            ${childHistoryFilterButton("pending", "確認待ち", activeFilter, Number(counts.pendingCount || 0) > 0)}
+            ${childHistoryFilterButton("redo", "やり直し", activeFilter, Number(counts.redoCount || 0) > 0)}
           `
       }
     </div>
   `;
 }
 
-function childHistoryFilterButton(value, label, activeFilter) {
+function childHistoryFilterButton(value, label, activeFilter, hasDot = false) {
   const isActive = value === activeFilter;
   return `
     <button class="filter-${value} ${isActive ? "active" : ""}" type="button" data-child-history-filter="${value}" aria-pressed="${isActive ? "true" : "false"}">
       ${label}
+      ${hasDot ? `<span class="filter-notification-dot" aria-hidden="true"></span>` : ""}
     </button>
   `;
 }
 
-function getDefaultPendingAwareFilter({ currentFilter, pendingCount, touched }) {
+function getDefaultPendingAwareFilter({ currentFilter, pendingCount, touched, fallbackFilter = "all" }) {
   if (!touched && pendingCount > 0 && (!currentFilter || currentFilter === "all")) {
     return "pending";
   }
 
   if (!touched && pendingCount === 0 && currentFilter === "pending") {
-    return "all";
+    return fallbackFilter;
   }
 
-  return currentFilter || "all";
+  return currentFilter || fallbackFilter;
 }
 
 function filterChildHistoryApplications(applications, filter) {
@@ -4008,68 +4227,56 @@ function filterChildHistoryRedemptions(redemptions, filter) {
 
 function normalizeChildHistoryFilter(filter, activeType) {
   const allowedFilters = activeType === "allowance"
-    ? ["all", "pending", "completed", "rejected"]
-    : ["all", "pending", "approved", "redo"];
-  return allowedFilters.includes(filter) ? filter : "all";
+    ? ["completed", "pending"]
+    : ["approved", "pending", "redo"];
+  return allowedFilters.includes(filter) ? filter : allowedFilters[0];
 }
 
 function applicationCard(application) {
-  const pointStatus = applicationPointStatus(application.status);
-  const scoreLabel = applicationScoreLabel(application);
   const canEdit = !isApprovedApplicationStatus(application.status);
   return `
     <div class="card application-card child-history-card">
-      <div class="child-history-content">
-        ${applicationMediaPreview(application)}
-        <div class="child-history-main">
-          <h2>${applicationTitle(application)}</h2>
-          <span class="child-history-date">${formatActivityTime(application.submittedAt)}</span>
-          <div class="child-activity-meta">
-            ${applicationCategoryChip(application)}
+      <div class="application-card-header child-history-application-header">
+        <div class="application-card-title child-history-main">
+          <h2>${applicationHistoryTitle(application)}</h2>
+          <div class="application-card-score-line">
+            ${parentApplicationCardSummary(application)}
           </div>
-          ${application.parentComment ? `<p class="child-parent-comment ${isRedoApplicationStatus(application.status) ? "is-redo" : ""}">${escapeHtml(application.parentComment)}</p>` : ""}
         </div>
-        <div class="child-history-side">
-          <strong class="child-history-points ${pointStatus.className}">
-            ${studyPayIcon(pointStatus.icon, "child-history-point-icon")}
-            <span>${applicationPointLabel(application)}</span>
-          </strong>
-          ${scoreLabel ? `<span class="child-history-score">${scoreLabel}</span>` : ""}
-          ${
-            canEdit
-              ? `<button class="child-history-edit-button" type="button" data-route="/child/apply/${application.id}" aria-label="申請を編集">${studyPayIcon("square-pen", "child-history-edit-icon")}</button>`
-              : ""
-          }
+        <strong class="application-card-points ${application.status}">${childHistoryPointLabel(application)}</strong>
+        ${
+          canEdit
+            ? `<button class="child-history-edit-button application-card-chevron" type="button" data-route="/child/apply/${application.id}" aria-label="申請を編集">${studyPayIcon("square-pen", "child-history-edit-icon")}</button>`
+            : studyPayIcon("chevron-right", "application-card-chevron")
+        }
+      </div>
+      ${application.parentComment ? `<p class="child-parent-comment ${isRedoApplicationStatus(application.status) ? "is-redo" : ""}">${escapeHtml(application.parentComment)}</p>` : ""}
+    </div>
+  `;
+}
+
+function childHistoryRedemptionCard(child, redemption) {
+  const exchangeInfo = getRedemptionExchangeInfo(child, redemption);
+  return `
+    <div class="card application-card child-history-card">
+      <div class="application-card-header child-history-application-header child-history-redemption-content">
+        <div class="application-card-title child-history-main">
+          <span class="redemption-exchange-item-name">${escapeHtml(exchangeInfo.name)}</span>
+          <div class="redemption-flow-line">
+            <strong>${redemption.points.toLocaleString()}<small>pt</small></strong>
+            ${studyPayIcon("move-right", "redemption-flow-icon")}
+            <strong>${Number(exchangeInfo.exchangeValue || 0).toLocaleString()}<small>${escapeHtml(exchangeInfo.unit)}</small></strong>
+          </div>
         </div>
+        ${studyPayIcon("chevron-right", "application-card-chevron")}
       </div>
     </div>
   `;
 }
 
-function childHistoryRedemptionCard(redemption) {
-  const status = redemptionHistoryStatus(redemption.status);
-  return `
-    <div class="card application-card child-history-card">
-      <div class="child-history-content child-history-redemption-content">
-        <div class="child-activity-thumb child-activity-placeholder" aria-hidden="true">¥</div>
-        <div class="child-history-main">
-          <h2>おこづかい申請</h2>
-          <span class="child-history-date">${formatActivityTime(redemption.requestedAt)}</span>
-          <div class="child-activity-meta">
-            <span class="category-chip other">おこづかい</span>
-            <span class="status-pill ${redemption.status}">${redemptionStatusLabel(redemption.status)}</span>
-          </div>
-        </div>
-        <div class="child-history-side">
-          <strong class="child-history-points ${status.className}">
-            ${studyPayIcon(status.icon, "child-history-point-icon")}
-            <span>${redemption.points.toLocaleString()}pt</span>
-          </strong>
-          <span class="child-history-score">${redemption.points.toLocaleString()}円</span>
-        </div>
-      </div>
-    </div>
-  `;
+function childHistoryPointLabel(application) {
+  const points = Number(application.fixedPoints ?? application.suggestedPoints ?? application.requestedPoints ?? 0);
+  return `${points.toLocaleString()}<small>pt</small>`;
 }
 
 function redemptionHistoryStatus(status) {
@@ -4128,6 +4335,14 @@ function applicationTitle(application) {
 
   if (application.category === "grade") {
     return `${escapeHtml(application.subjectName || "成績")}の成績`;
+  }
+
+  return escapeHtml(application.otherContent || "その他の申請");
+}
+
+function applicationHistoryTitle(application) {
+  if (application.category === "test" || application.category === "grade") {
+    return escapeHtml(application.subjectName || categoryLabel(application.category));
   }
 
   return escapeHtml(application.otherContent || "その他の申請");
@@ -4316,7 +4531,7 @@ function childBottomNav(active) {
     ["home", "⌂", "ホーム", "/child"],
     ["history", "□", "履歴", "/child/history"],
     ["apply", "+", "申請", "/child/apply"],
-    ["redeem", "¥", "おこづかい申請", "/child/redeem"],
+    ["redeem", "¥", "おこづかい申請", "/child/exchange"],
     ["points", "pt", "ポイント", "/child/points"],
   ];
 
@@ -4586,10 +4801,22 @@ function bindParentHome() {
 }
 
 function bindHomeExchangeUnitButtons() {
-  document.querySelectorAll("[data-exchange-unit-child-id] [data-redemption-unit-input]").forEach((input) => {
-    input.addEventListener("input", () => validateExchangeUnitInput(input));
-    input.addEventListener("change", () => saveExchangeUnitInput(input));
-    input.addEventListener("blur", () => saveExchangeUnitInput(input));
+  document.querySelectorAll("[data-add-exchange-item]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const child = findChild(button.closest("[data-exchange-unit-child-id]")?.dataset.exchangeUnitChildId);
+      if (child) {
+        showExchangeItemModal(child);
+      }
+    });
+  });
+  document.querySelectorAll("[data-edit-exchange-item]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const child = findChild(button.closest("[data-exchange-unit-child-id]")?.dataset.exchangeUnitChildId);
+      const item = child ? getChildExchangeItemSettings(child)[Number(button.dataset.editExchangeItem)] : null;
+      if (child && item) {
+        showExchangeItemModal(child, item, Number(button.dataset.editExchangeItem));
+      }
+    });
   });
 }
 
@@ -4624,6 +4851,115 @@ function saveExchangeUnitInput(input) {
 
   input.value = String(value);
   updateChild(childId, { redemptionUnit: value });
+}
+
+function deleteExchangeItemSetting(button) {
+  const card = button.closest("[data-exchange-unit-child-id]");
+  const childId = card?.dataset.exchangeUnitChildId;
+  const row = button.closest("[data-exchange-item-row]");
+  if (!card || !childId || !row) {
+    return;
+  }
+
+  const nextItems = readExchangeItemSettingsFromCard(card, row.dataset.exchangeItemRow);
+  updateChild(childId, { exchangeItems: nextItems });
+  render();
+}
+
+function readExchangeItemSettingsFromCard(card, excludedIndex = "") {
+  const child = findChild(card?.dataset.exchangeUnitChildId);
+  return getChildExchangeItemSettings(child).filter((_, index) => String(index) !== String(excludedIndex));
+}
+
+function showExchangeItemModal(child, item = null, itemIndex = -1) {
+  document.querySelector("#exchange-item-modal")?.remove();
+  const isEditing = itemIndex >= 0;
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal exchange-item-modal";
+  modal.id = "exchange-item-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="exchange-item-modal-title">
+      <h2 id="exchange-item-modal-title">${isEditing ? "ごほうび編集" : "ごほうび追加"}</h2>
+      <form class="exchange-item-modal-form" id="exchange-item-form">
+        <label class="rule-edit-field" for="exchange-item-name">
+          <span>交換するもの</span>
+          <input id="exchange-item-name" name="name" autocomplete="off" value="${escapeHtml(item?.name || "")}" placeholder="例: おこづかい" />
+        </label>
+        <div class="exchange-item-modal-grid">
+          <label class="rule-edit-field" for="exchange-item-points">
+            <span>pt交換単位</span>
+            <input id="exchange-item-points" name="points" inputmode="numeric" value="${escapeHtml(String(item?.points || child.redemptionUnit || 100))}" />
+          </label>
+          <label class="rule-edit-field" for="exchange-item-value">
+            <span>金額／数量／時間</span>
+            <input id="exchange-item-value" name="exchangeValue" inputmode="numeric" value="${escapeHtml(String(item?.exchangeValue || ""))}" placeholder="例: 30" />
+          </label>
+          <label class="rule-edit-field exchange-item-unit-field" for="exchange-item-unit">
+            <span>単位</span>
+            <select id="exchange-item-unit" name="unit">
+              ${EXCHANGE_ITEM_UNIT_OPTIONS.map((unitOption) => `<option value="${escapeHtml(unitOption)}" ${selectedAttr(item?.unit || "円", unitOption)}>${escapeHtml(unitOption)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+        <p class="error" id="exchange-item-error" aria-live="polite"></p>
+        <div class="exchange-item-modal-actions">
+          <button class="primary-button compact-button" type="submit">${isEditing ? "保存" : "追加"}</button>
+          ${isEditing ? `<button class="danger-button compact-button" type="button" id="delete-exchange-item">削除</button>` : ""}
+          <button class="secondary-button compact-button" type="button" id="cancel-exchange-item">キャンセル</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  const closeModal = () => modal.remove();
+  document.querySelector("#cancel-exchange-item")?.addEventListener("click", closeModal);
+  document.querySelector("#delete-exchange-item")?.addEventListener("click", () => {
+    updateChild(child.id, {
+      exchangeItems: getChildExchangeItemSettings(child).filter((_, index) => index !== itemIndex),
+    });
+    closeModal();
+    render();
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+  document.querySelector("#exchange-item-name")?.focus();
+
+  document.querySelector("#exchange-item-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const error = document.querySelector("#exchange-item-error");
+    const name = String(form.get("name") || "").trim();
+    const unit = String(form.get("unit") || "").trim();
+    const points = Number(String(form.get("points") || "").replaceAll(",", ""));
+    const exchangeValue = Number(String(form.get("exchangeValue") || "").replaceAll(",", ""));
+
+    if (!name || !unit || !Number.isInteger(points) || points <= 0 || !Number.isInteger(exchangeValue) || exchangeValue <= 0) {
+      if (error) {
+        error.textContent = "交換するもの、pt交換単位、金額／数量／時間、単位を入力してください。";
+      }
+      return;
+    }
+
+    const currentItems = getChildExchangeItemSettings(child);
+    const nextItem = {
+      id: item?.id || `exchange-item-${Date.now()}`,
+      name,
+      points,
+      exchangeValue,
+      unit,
+    };
+    const nextItems = isEditing
+      ? currentItems.map((currentItem, index) => (index === itemIndex ? nextItem : currentItem))
+      : [...currentItems, nextItem];
+
+    updateChild(child.id, { exchangeItems: nextItems });
+    closeModal();
+    render();
+  });
 }
 
 function bindParentApplications() {
@@ -7626,6 +7962,19 @@ function ensureChildApplyOtherTaskDropdown(child) {
 function bindChildRedeem(child) {
   bindChildShell();
   const form = document.querySelector("#redemption-form");
+  const itemSelect = document.querySelector("#redemption-item");
+  const itemDetail = document.querySelector("#exchange-item-detail");
+  const exchangeItems = getChildExchangeItemSettings(child);
+  const syncExchangeItemDetail = () => {
+    const selectedIndex = Number(itemSelect?.selectedOptions?.[0]?.dataset.exchangeItemIndex || 0);
+    if (itemDetail) {
+      itemDetail.textContent = formatExchangeItemDetail(exchangeItems[selectedIndex]);
+    }
+  };
+
+  itemSelect?.addEventListener("change", syncExchangeItemDetail);
+  syncExchangeItemDetail();
+
   if (!form) {
     return;
   }
@@ -7633,11 +7982,25 @@ function bindChildRedeem(child) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const points = Number(formData.get("points") || 0);
+    const points = Number(String(formData.get("points") || "").replaceAll(",", ""));
+    const itemName = String(formData.get("itemName") || getChildExchangeItems(child)[0] || "おこづかい").trim();
+    const selectedIndex = Number(itemSelect?.selectedOptions?.[0]?.dataset.exchangeItemIndex || 0);
+    const selectedItem = exchangeItems[selectedIndex] || exchangeItems[0] || null;
+    const itemPointUnit = Number(selectedItem?.points || child.redemptionUnit || 100);
     const error = document.querySelector("#redemption-error");
 
     if (!points || points > getAvailablePoints(child)) {
-      error.textContent = "申請ポイントを確認してください。";
+      error.textContent = "ポイントが足りません";
+      return;
+    }
+
+    if (!Number.isInteger(points) || points % itemPointUnit !== 0) {
+      error.textContent = `${itemPointUnit.toLocaleString()}ポイント単位で入力してください。`;
+      return;
+    }
+
+    if (!itemName) {
+      error.textContent = "交換アイテムを選択してください。";
       return;
     }
 
@@ -7645,6 +8008,9 @@ function bindChildRedeem(child) {
       id: `redemption-${Date.now()}`,
       childId: child.id,
       points,
+      itemName,
+      exchangeValue: calculateExchangeValueForPoints(selectedItem, points),
+      exchangeUnit: String(selectedItem?.unit || "円"),
       status: "pending",
       requestedAt: new Date().toISOString(),
       completedAt: null,
@@ -7654,8 +8020,32 @@ function bindChildRedeem(child) {
       redemptions: [redemption, ...(child.redemptions || [])],
     });
     await syncCurrentAccountToCloud();
-    state.flash = `${points.toLocaleString()}ptのおこづかい申請を送りました。`;
-    render();
+    showExchangeSubmittedModal();
+  });
+}
+
+function showExchangeSubmittedModal() {
+  document.querySelector("#exchange-submitted-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.className = "child-complete-modal";
+  modal.id = "exchange-submitted-modal";
+  modal.innerHTML = `
+    <div class="child-complete-modal-panel" role="dialog" aria-modal="true" aria-labelledby="exchange-submitted-title">
+      <strong id="exchange-submitted-title">申請完了</strong>
+      <p>交換申請を送りました。</p>
+      <button class="primary-button child-complete-modal-button" type="button" id="exchange-submitted-ok">OK</button>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  document.querySelector("#exchange-submitted-ok")?.addEventListener("click", () => {
+    modal.remove();
+    state.childHistoryType = "allowance";
+    state.childHistoryFilter = "pending";
+    state.childHistoryFilterTouched = true;
+    navigate("/child/history");
   });
 }
 
@@ -8643,7 +9033,7 @@ function updateRedemption(childId, redemptionId, status) {
             type: `redemption_${status}`,
             title: redemptionStatusNotificationTitle(status, cancelCompleted),
             message: redemptionStatusNotificationMessage(status, points, cancelCompleted),
-            route: "/child/redeem",
+            route: "/child/exchange",
             createdAt: now,
           })
         : null;
@@ -9127,6 +9517,7 @@ function createDemoChild(now) {
     otherTasks: createDefaultOtherPointTasks(now),
     defaultOtherTasksSeededAt: now.toISOString(),
     redemptionUnit: 100,
+    exchangeItems: DEFAULT_EXCHANGE_ITEM_SETTINGS.map((item) => ({ ...item })),
     applications: [englishApplication, mathApplication, japaneseApplication],
     redemptions: [pendingRedemption, completedRedemption],
     bonusSettings: demoBonusSettings,
@@ -9235,11 +9626,11 @@ function createDemoChildNotifications(now, approvedAt) {
   const demoDate = (minutesAgo) => getDateAfterMinutes(now, -minutesAgo).toISOString();
   const rows = [
     ["demo_child_application_approved", "申請が承認されました", "算数が承認され、900ptが増えました。", "/child/history", approvedAt, null],
-    ["demo_child_redemption_completed", "おこづかいが支給されました", "500円のおこづかいが支給済みになりました。", "/child/redeem", now.toISOString(), null],
+    ["demo_child_redemption_completed", "おこづかいが支給されました", "500円のおこづかいが支給済みになりました。", "/child/exchange", now.toISOString(), null],
     ["demo_child_application_returned", "申請が戻されました", "国語の申請に、もう一度写真を追加してください。", "/child/history", demoDate(45), null],
     ["demo_child_application_pending", "申請を確認中です", "英語の申請を保護者が確認しています。", "/child/history", demoDate(100), demoDate(80)],
     ["demo_child_bonus_granted", "ボーナスが追加されました", "誕生月ボーナスとして300ptが増えました。", "/child/history", demoDate(180), demoDate(150)],
-    ["demo_child_redemption_pending", "おこづかい申請中です", "500ptのおこづかい申請を保護者が確認しています。", "/child/redeem", demoDate(280), null],
+    ["demo_child_redemption_pending", "おこづかい申請中です", "500ptのおこづかい申請を保護者が確認しています。", "/child/exchange", demoDate(280), null],
     ["demo_child_application_approved", "申請が承認されました", "理科の申請が承認され、500ptが増えました。", "/child/history", demoDate(480), demoDate(430)],
     ["demo_child_system_tip", "写真を追加できます", "テストや成績の申請には写真を追加してください。", "/child/apply", demoDate(900), null],
     ["demo_child_system_tip", "ポイント履歴を確認できます", "何でポイントが増えたか履歴から確認できます。", "/child/history", demoDate(1500), demoDate(1400)],
@@ -9500,6 +9891,7 @@ function createChild({ nickname, profilePhoto, loginId, password }) {
     otherTasks: createDefaultOtherPointTasks(),
     defaultOtherTasksSeededAt: new Date().toISOString(),
     redemptionUnit: 100,
+    exchangeItems: DEFAULT_EXCHANGE_ITEM_SETTINGS.map((item) => ({ ...item })),
     createdAt: new Date().toISOString(),
   };
 }
@@ -10500,6 +10892,12 @@ function studyPayIcon(name, className = "") {
     camera: `
       <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/>
       <circle cx="12" cy="13" r="3"/>
+    `,
+    "arrow-left-right": `
+      <path d="M8 3 4 7l4 4"/>
+      <path d="M4 7h16"/>
+      <path d="m16 21 4-4-4-4"/>
+      <path d="M20 17H4"/>
     `,
     "chevron-left": `<path d="m15 18-6-6 6-6"/>`,
     "chevron-right": `<path d="m9 18 6-6-6-6"/>`,

@@ -48,7 +48,7 @@
             <strong>${availablePoints.toLocaleString()}<small>pt</small></strong>
             <p>確定 ${child.currentPoints.toLocaleString()}pt / おこづかい申請中 ${pendingRedemptionPoints.toLocaleString()}pt</p>
           </div>
-          <button class="child-exchange-button" type="button" data-route="/child/redeem">申請する</button>
+          <button class="child-exchange-button" type="button" data-route="/child/exchange">申請する</button>
           <div class="child-points-metrics">
             <div>
               <span>今月の獲得</span>
@@ -215,7 +215,7 @@
       ["home", "⌂", "ホーム", "/child"],
       ["history", "□", "履歴", "/child/history"],
       ["apply", "+", "申請", "/child/apply"],
-      ["redeem", "¥", "おこづかい", "/child/redeem"],
+      ["redeem", "¥", "おこづかい", "/child/exchange"],
       ["points", "pt", "ポイント", "/child/points"],
     ];
 

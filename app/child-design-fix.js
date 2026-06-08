@@ -77,9 +77,14 @@
 
       scheduleUpgrade();
       const route = routeButton.dataset.route;
+      const childHistoryType = routeButton.dataset.childHistoryTypeTarget;
       const childHistoryFilter = routeButton.dataset.childHistoryFilterTarget;
+      if (childHistoryType && typeof state !== "undefined") {
+        state.childHistoryType = childHistoryType;
+      }
       if (childHistoryFilter && typeof state !== "undefined") {
         state.childHistoryFilter = childHistoryFilter;
+        state.childHistoryFilterTouched = true;
       }
       if (route && location.hash !== `#${route}`) {
         goToRoute(route);
@@ -405,6 +410,11 @@
       return;
     }
 
+    if (route === "/child/exchange") {
+      upgradeExchangeScreen(screen);
+      return;
+    }
+
     upgradeSubScreen(screen, route);
   }
 
@@ -457,7 +467,9 @@
           <span>${escapeText(child.nickname || "タロー")}のポイント</span>
           <strong><span class="child-balance-number ${isAvailablePointsCapped ? "is-capped" : ""}">${displayedAvailablePoints.toLocaleString()}</span><small>ポイント</small></strong>
         </div>
-        <button class="child-exchange-button" type="button" data-route="/child/redeem">交換する</button>
+        <button class="child-exchange-button" type="button" data-route="/child/exchange">
+          <span>ポイント交換</span>
+        </button>
         <div class="child-balance-metrics">
           <div>
             <span>今月の獲得</span>
@@ -560,6 +572,32 @@
       comment.placeholder = "がんばったところ、見てほしいところを書いてね";
     }
 
+  }
+
+  function upgradeExchangeScreen(screen) {
+    screen.classList.add("child-apply-design", "child-exchange-design");
+    upgradeHeader(screen);
+    removeBottomNav(screen);
+
+    const pageHeading = screen.querySelector(".page-heading");
+    if (pageHeading && !screen.querySelector(".child-apply-hero")) {
+      pageHeading.classList.add("child-apply-hero");
+      pageHeading.innerHTML = `
+        <span class="child-apply-hero-spacer" aria-hidden="true"></span>
+        <h1>ポイント交換</h1>
+        <button class="child-apply-close-button" type="button" data-route="/child" aria-label="閉じる">${lucideIcon("x", "child-apply-close-icon")}</button>
+      `;
+    }
+
+    const heroTitle = pageHeading?.querySelector("h1");
+    if (heroTitle) {
+      heroTitle.textContent = "ポイント交換";
+    }
+
+    const form = screen.querySelector("#redemption-form");
+    if (form) {
+      form.classList.add("child-apply-card", "child-exchange-card");
+    }
   }
 
   function decorateCategoryField(form) {
@@ -1145,7 +1183,8 @@
   }
 
   function homePointHistoryList(child) {
-    const transactions = getPointTransactions(child).slice(0, 5);
+    const allTransactions = getPointTransactions(child);
+    const transactions = allTransactions.slice(0, 5);
     return `
       <div class="application-list section-tight child-home-point-history-list">
         ${
@@ -1154,6 +1193,11 @@
             : `<div class="card empty-state"><strong>ポイント履歴はまだありません</strong><p>申請が承認されるとここに表示されます。</p></div>`
         }
       </div>
+      ${
+        allTransactions.length
+          ? `<button class="text-button child-home-point-history-more" type="button" data-route="/child/history" data-child-history-type-target="points" data-child-history-filter-target="all">もっと見る</button>`
+          : ""
+      }
     `;
   }
 
@@ -1168,7 +1212,6 @@
           <time class="child-home-point-history-date">${escapeText(formatDateTime(transaction.createdAt))}</time>
         </div>
         <strong class="child-home-point-history-points ${tone}">${positive ? "+" : ""}${points.toLocaleString()}pt</strong>
-        <span class="status-pill child-home-point-history-tag ${tone}">${escapeText(pointTransactionLabel(transaction.type))}</span>
       </div>
     `;
   }
@@ -1177,19 +1220,6 @@
     return [...(child.pointTransactions || [])].sort(
       (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
     );
-  }
-
-  function pointTransactionLabel(type) {
-    const labels = {
-      grant: "ポイント付与",
-      redemption: "おこづかい支給",
-      cancel_redemption: "支給取消",
-      cancel_grant: "承認取消",
-      adjustment: "調整",
-      monthly_bonus: "ボーナス",
-      cancel_monthly_bonus: "ボーナス取消",
-    };
-    return labels[type] || "ポイント";
   }
 
   function pointTransactionTone(transaction) {
@@ -1216,7 +1246,7 @@
 
     const hours = String(date.getHours()).padStart(2, "0");
     const minutes = String(date.getMinutes()).padStart(2, "0");
-    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hours}時${minutes}分`;
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${hours}:${minutes}`;
   }
 
   function getCurrentChildData() {
@@ -1742,7 +1772,7 @@
         color: #fff;
         overflow: hidden;
         padding: 28px 24px 24px;
-        box-shadow: 0 12px 22px rgba(255, 130, 0, 0.16);
+        box-shadow: 5px 5px 6px rgb(0 0 0 / 40%);
       }
 
       .child-balance-card::before {
@@ -1753,9 +1783,7 @@
       }
 
       .child-balance-card.has-custom-bg::before {
-        background:
-          linear-gradient(rgba(0, 0, 0, 0.28), rgba(0, 0, 0, 0.28)),
-          var(--child-balance-bg-image) center / cover no-repeat;
+        background: var(--child-balance-bg-image) center / cover no-repeat;
       }
 
       .child-balance-card > * {
@@ -1767,9 +1795,11 @@
         display: grid;
         gap: 12px;
         min-width: 0;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
       }
 
       .child-balance-copy > span {
+        color: rgba(255, 255, 255, 0.9);
         font-size: 18px;
         font-weight: 800;
       }
@@ -1779,6 +1809,7 @@
         align-items: baseline;
         flex-wrap: nowrap;
         gap: 6px;
+        color: #fff;
         font-size: 42px;
         line-height: 1;
         letter-spacing: 0;
@@ -1806,15 +1837,25 @@
       }
 
       .child-exchange-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
         align-self: center;
         min-height: 54px;
-        border: 1px solid rgba(255, 255, 255, 0.55);
+        border: 1px solid #fff;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.18);
-        color: #fff;
+        background: rgba(255, 255, 255, 0.8);
+        color: var(--primary);
         padding: 0 24px;
         font-size: 18px;
         font-weight: 900;
+      }
+
+      .child-exchange-button-icon {
+        width: 20px;
+        height: 20px;
+        flex: 0 0 auto;
       }
 
       .child-card-bg-text-button {
@@ -1833,7 +1874,7 @@
         position: relative;
         display: grid;
         justify-items: end;
-        margin: -24px 0 30px;
+        margin: -24px 0 0;
       }
 
       .child-card-bg-menu {
@@ -1889,10 +1930,11 @@
         min-height: 72px;
         border: 0;
         border-radius: 16px;
-        background: rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.24);
         color: #fff;
         padding: 13px 16px;
         text-align: left;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
       }
 
       .child-balance-metric-button {
@@ -1924,7 +1966,20 @@
       }
 
       .child-home-point-history-list {
-        gap: 12px;
+        gap: 6px;
+      }
+
+      .child-home-point-history-more {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: fit-content;
+        min-height: 44px;
+        margin: 12px auto 0;
+        color: var(--primary);
+        padding: 0 12px;
+        font-size: 15px;
+        font-weight: 800;
       }
 
       .child-home-point-history-card {
@@ -1933,7 +1988,7 @@
         gap: 10px 14px;
         align-items: start;
         border: 0;
-        border-radius: 24px;
+        border-radius: 10px;
         box-shadow: 0 10px 28px rgba(119, 85, 40, 0.06);
       }
 
@@ -1945,21 +2000,22 @@
         margin: 0 0 7px;
         color: var(--ink);
         font-size: 15px;
-        font-weight: 800;
+        font-weight: 600;
         line-height: 1.35;
       }
 
       .child-home-point-history-date {
         display: block;
-        color: var(--muted);
+        color: #b8b8b8;
         font-size: 12px;
-        font-weight: 500;
+        font-weight: 400;
         line-height: 1.4;
       }
 
       .child-home-point-history-points {
         grid-column: 2;
         grid-row: 1;
+        align-self: center;
         justify-self: end;
         color: #16a34a;
         font-size: 18px;
@@ -1976,37 +2032,18 @@
         color: #d97706;
       }
 
-      .child-home-point-history-tag {
-        grid-column: 1 / -1;
-        justify-self: start;
-        margin-top: 2px;
-        border: 0;
-        background: #16a34a;
-        color: #ffffff;
-        padding: 4px 9px;
-        font-size: 11px;
-        font-weight: 600;
-        line-height: 1.4;
-      }
-
-      .child-home-point-history-tag.is-redemption {
-        background: #dc2626;
-      }
-
-      .child-home-point-history-tag.is-pending {
-        background: #d97706;
-      }
-
       .child-section-heading {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: center;
         gap: 16px;
         margin-bottom: 20px;
       }
 
       .child-section-heading h2 {
         margin: 0;
+        width: 100%;
+        text-align: center;
         font-size: 22px;
         line-height: 1.25;
       }
