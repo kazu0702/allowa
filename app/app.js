@@ -30,8 +30,11 @@ const CHILD_CLOUD_REFRESH_INTERVAL_MS = 15000;
 const PARENT_CLOUD_REFRESH_INTERVAL_MS = 15000;
 const PROFILE_PHOTO_MAX_SIZE = 320;
 const PROFILE_PHOTO_JPEG_QUALITY = 0.82;
-const APPLICATION_PHOTO_MAX_SIZE = 1280;
-const APPLICATION_PHOTO_JPEG_QUALITY = 0.82;
+const APPLICATION_PHOTO_MAX_SIZE = 900;
+const APPLICATION_PHOTO_MIN_SIZE = 560;
+const APPLICATION_PHOTO_JPEG_QUALITY = 0.68;
+const APPLICATION_PHOTO_MIN_JPEG_QUALITY = 0.46;
+const APPLICATION_PHOTO_MAX_DATA_URL_LENGTH = 240000;
 const MAX_RANK_RULE_ROWS = 10;
 const MAX_GRADE_RULE_ROWS = 10;
 const PARENT_PULL_REFRESH_THRESHOLD = 76;
@@ -10104,13 +10107,54 @@ function createApplicationPhotoFromFile(file) {
         context.drawImage(image, 0, 0, width, height);
         resolve({
           name: file.name,
-          dataUrl: canvas.toDataURL("image/jpeg", APPLICATION_PHOTO_JPEG_QUALITY),
+          dataUrl: createCompressedApplicationPhotoDataUrl(canvas),
         });
       };
       image.src = String(reader.result || "");
     };
     reader.readAsDataURL(file);
   });
+}
+
+function createCompressedApplicationPhotoDataUrl(sourceCanvas) {
+  let width = sourceCanvas.width;
+  let height = sourceCanvas.height;
+  let quality = APPLICATION_PHOTO_JPEG_QUALITY;
+  let canvas = sourceCanvas;
+  let dataUrl = canvas.toDataURL("image/jpeg", quality);
+
+  while (
+    dataUrl.length > APPLICATION_PHOTO_MAX_DATA_URL_LENGTH &&
+    (quality > APPLICATION_PHOTO_MIN_JPEG_QUALITY || Math.max(width, height) > APPLICATION_PHOTO_MIN_SIZE)
+  ) {
+    if (quality > APPLICATION_PHOTO_MIN_JPEG_QUALITY) {
+      quality = Math.max(APPLICATION_PHOTO_MIN_JPEG_QUALITY, quality - 0.08);
+    } else {
+      const scale = Math.max(
+        APPLICATION_PHOTO_MIN_SIZE / Math.max(width, height),
+        0.82,
+      );
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      canvas = resizeCanvas(canvas, width, height);
+    }
+    dataUrl = canvas.toDataURL("image/jpeg", quality);
+  }
+
+  return dataUrl;
+}
+
+function resizeCanvas(sourceCanvas, width, height) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return sourceCanvas;
+  }
+
+  context.drawImage(sourceCanvas, 0, 0, width, height);
+  return canvas;
 }
 
 window.studyPayCreateApplicationPhotoFromFile = createApplicationPhotoFromFile;
