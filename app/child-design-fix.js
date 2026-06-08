@@ -867,6 +867,7 @@
     photoInput.dataset.childPhotoInput = "library";
     photoInput.setAttribute("accept", "image/*");
     photoInput.setAttribute("multiple", "");
+    const useNativeIOSPhotoPicker = isIOSNativePhotoPickerDevice();
 
     const cameraInput = document.createElement("input");
     cameraInput.className = "child-photo-hidden-input";
@@ -909,8 +910,12 @@
       </label>
     `;
     preview.insertAdjacentElement("afterend", menu);
-    menu.querySelector('[data-child-photo-action="camera"]')?.appendChild(cameraInput);
-    menu.querySelector('[data-child-photo-action="library"]')?.appendChild(photoInput);
+    if (useNativeIOSPhotoPicker) {
+      menu.remove();
+    } else {
+      menu.querySelector('[data-child-photo-action="camera"]')?.appendChild(cameraInput);
+      menu.querySelector('[data-child-photo-action="library"]')?.appendChild(photoInput);
+    }
 
     const routeApplication = getRouteApplication();
     window.__studyPayExistingPhotos = [...(routeApplication?.photos || [])];
@@ -950,6 +955,10 @@
 
     drop.addEventListener("click", (event) => {
       event.preventDefault();
+      if (useNativeIOSPhotoPicker) {
+        photoInput.click();
+        return;
+      }
       togglePhotoMenu();
     });
 
@@ -968,6 +977,10 @@
       const openButton = event.target.closest("[data-child-photo-open]");
       if (openButton) {
         event.preventDefault();
+        if (useNativeIOSPhotoPicker) {
+          photoInput.click();
+          return;
+        }
         togglePhotoMenu();
         return;
       }
@@ -990,6 +1003,17 @@
 
       await renderPhotoPreviewState(preview, feedback, photoInput, drop);
     });
+  }
+
+  function isIOSNativePhotoPickerDevice() {
+    const userAgent = navigator.userAgent || "";
+    const platform = navigator.platform || "";
+    return /iPhone|iPad|iPod/i.test(userAgent)
+      || (platform === "MacIntel" && Number(navigator.maxTouchPoints || 0) > 1);
+  }
+
+  function getRoute() {
+    return location.hash.replace("#", "") || "/";
   }
 
   async function renderPhotoPreviewState(preview, feedback, photoInput, drop) {

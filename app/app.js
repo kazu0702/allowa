@@ -7720,6 +7720,7 @@ function ensureChildApplyPhotoDesign(editingApplication = null) {
   photoInput.dataset.childPhotoInput = "library";
   photoInput.setAttribute("accept", "image/*");
   photoInput.setAttribute("multiple", "");
+  const useNativeIOSPhotoPicker = isIOSNativePhotoPickerDevice();
 
   const cameraInput = document.createElement("input");
   cameraInput.className = "child-photo-hidden-input";
@@ -7759,8 +7760,12 @@ function ensureChildApplyPhotoDesign(editingApplication = null) {
     </label>
   `;
   preview.insertAdjacentElement("afterend", menu);
-  menu.querySelector('[data-child-photo-action="camera"]')?.appendChild(cameraInput);
-  menu.querySelector('[data-child-photo-action="library"]')?.appendChild(photoInput);
+  if (useNativeIOSPhotoPicker) {
+    menu.remove();
+  } else {
+    menu.querySelector('[data-child-photo-action="camera"]')?.appendChild(cameraInput);
+    menu.querySelector('[data-child-photo-action="library"]')?.appendChild(photoInput);
+  }
 
   window.__studyPayExistingPhotos = [...(editingApplication?.photos || [])];
   window.__studyPayExistingPhotoNames = [...(editingApplication?.photoNames || [])];
@@ -7832,6 +7837,10 @@ function ensureChildApplyPhotoDesign(editingApplication = null) {
 
   drop.addEventListener("click", (event) => {
     event.preventDefault();
+    if (useNativeIOSPhotoPicker) {
+      photoInput.click();
+      return;
+    }
     menu.hidden = !menu.hidden;
   });
   document.addEventListener("click", (event) => {
@@ -7845,6 +7854,10 @@ function ensureChildApplyPhotoDesign(editingApplication = null) {
     const openButton = event.target.closest("[data-child-photo-open]");
     if (openButton) {
       event.preventDefault();
+      if (useNativeIOSPhotoPicker) {
+        photoInput.click();
+        return;
+      }
       menu.hidden = !menu.hidden;
       return;
     }
@@ -7868,6 +7881,13 @@ function ensureChildApplyPhotoDesign(editingApplication = null) {
   });
 
   renderPreview();
+}
+
+function isIOSNativePhotoPickerDevice() {
+  const userAgent = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  return /iPhone|iPad|iPod/i.test(userAgent)
+    || (platform === "MacIntel" && Number(navigator.maxTouchPoints || 0) > 1);
 }
 
 function ensureChildApplyOtherTaskDropdown(child) {
