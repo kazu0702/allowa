@@ -22,6 +22,12 @@
       <circle cx="12" cy="10" r="4"/>
       <circle cx="12" cy="12" r="10"/>
     `,
+    "user-round-plus": `
+      <path d="M2 21a8 8 0 0 1 13.292-6"/>
+      <circle cx="10" cy="8" r="5"/>
+      <path d="M19 16v6"/>
+      <path d="M22 19h-6"/>
+    `,
     "arrow-left-right": `
       <path d="M8 3 4 7l4 4"/>
       <path d="M4 7h16"/>

@@ -1586,15 +1586,39 @@
 
   function childDesignProfileAvatar(child) {
     const photo = child?.profilePhoto?.dataUrl;
+    const photoStyle = profilePhotoImageStyle(child?.profilePhoto);
     return `
       <span class="child-design-profile-avatar ${photo ? "has-photo" : ""}">
         ${
           photo
-            ? `<img src="${escapeText(photo)}" alt="${escapeText(child?.profilePhoto?.name || `${child?.nickname || "こども"}のプロフィール写真`)}" />`
+            ? `<img src="${escapeText(photo)}" alt="${escapeText(child?.profilePhoto?.name || `${child?.nickname || "こども"}のプロフィール写真`)}" ${photoStyle} />`
             : lucideIcon("circle-user-round", "child-profile-icon")
         }
       </span>
     `;
+  }
+
+  function profilePhotoImageStyle(profilePhoto) {
+    const x = clampProfilePhotoPosition(profilePhoto?.positionX ?? 50);
+    const y = clampProfilePhotoPosition(profilePhoto?.positionY ?? 50);
+    const scale = clampProfilePhotoScale(profilePhoto?.scale ?? 1);
+    return `style="object-position: ${x}% ${y}%; transform: scale(${scale});"`;
+  }
+
+  function clampProfilePhotoPosition(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return 50;
+    }
+    return Math.min(100, Math.max(0, number));
+  }
+
+  function clampProfilePhotoScale(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) {
+      return 1;
+    }
+    return Math.min(3, Math.max(1, number));
   }
 
   function lucideIcon(name, className = "") {
@@ -1736,6 +1760,7 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+        transform-origin: center;
       }
 
       .child-design-logo-image {

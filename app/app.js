@@ -1288,10 +1288,12 @@ function parentHomeView() {
           <img class="header-logo-image parent-header-logo-image" src="./logo.svg?v=phase322" alt="allowa" />
         </div>
         <div class="parent-header-switch">
-          <button class="parent-header-profile" type="button" id="parent-child-switch-trigger" aria-haspopup="menu" aria-expanded="false">
-            ${studyPayIcon("circle-user-round", "parent-profile-icon")}
-            <span>${escapeHtml(parent.nickname || "保護者")}</span>
-          </button>
+          ${parentHeaderChildButtons(children)}
+          ${children.length < MAX_CHILDREN ? `
+            <button class="parent-header-add-child-button" type="button" data-route="/parent/children/new" aria-label="こどもを追加する">
+              ${studyPayIcon("user-round-plus", "parent-header-add-child-icon")}
+            </button>
+          ` : ""}
           ${parentChildSwitchMenu(children)}
         </div>
       </div>
@@ -1309,20 +1311,26 @@ function parentHomeView() {
   `;
 }
 
+function parentHeaderChildButtons(children) {
+  if (!children.length) {
+    return `<span class="parent-header-child-empty" aria-hidden="true">${studyPayIcon("circle-user-round", "parent-header-child-empty-icon")}</span>`;
+  }
+
+  return `
+    <span class="parent-header-child-list">
+      ${children.map((child) => `
+        <button class="parent-header-child-button" type="button" data-parent-header-child-id="${escapeHtml(child.id)}" data-parent-header-child-name="${escapeHtml(child.nickname)}" aria-haspopup="menu" aria-expanded="false" aria-label="${escapeHtml(child.nickname)}に切り替える">
+          ${childAvatar(child, "parent-header-child-avatar")}
+        </button>
+      `).join("")}
+    </span>
+  `;
+}
+
 function parentChildSwitchMenu(children) {
   return `
     <div class="parent-child-switch-menu" id="parent-child-switch-menu" role="menu" hidden>
-      ${
-        children.length
-          ? children.map((child) => `
-            <button type="button" role="menuitem" data-switch-child-id="${escapeHtml(child.id)}">
-              ${childAvatar(child, "parent-child-switch-avatar")}
-              <span>${escapeHtml(child.nickname)}</span>
-            </button>
-          `).join("")
-          : `<button type="button" role="menuitem" data-route="/parent/children/new">こどもを追加する</button>`
-      }
-      <button class="parent-child-switch-logout" type="button" role="menuitem" data-route="/parent/settings/logout">ログアウト</button>
+      <button class="parent-child-switch-title" type="button" role="menuitem" data-switch-child-id="" ${children.length ? "" : "disabled"}>こどもに切り替える</button>
     </div>
   `;
 }
@@ -1357,11 +1365,12 @@ function isPreviewNoChildren() {
 
 function childAvatar(child, className = "") {
   const photo = child?.profilePhoto?.dataUrl;
+  const photoStyle = profilePhotoImageStyle(child?.profilePhoto);
   return `
     <span class="child-avatar profile-avatar ${photo ? "profile-avatar-photo" : ""} ${className}">
       ${
         photo
-          ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(child?.profilePhoto?.name || `${child?.nickname || "こども"}のプロフィール写真`)}" />`
+          ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(child?.profilePhoto?.name || `${child?.nickname || "こども"}のプロフィール写真`)}" ${photoStyle} />`
           : studyPayIcon("circle-user-round", "profile-avatar-icon")
       }
     </span>
@@ -1497,14 +1506,10 @@ function parentSettingsView() {
       <div class="settings-menu">
         ${settingsMenuButton("ボーナス設定", "/parent/monthly-bonus")}
         ${settingsMenuButton("ポイント交換設定", "/parent/settings/exchange-unit")}
-        ${settingsMenuButton("プラン・支払い設定", "/parent/billing")}
         ${settingsMenuButton("メールアドレス設定", "/parent/settings/email")}
         ${settingsMenuButton("パスワード変更", "/parent/settings/password")}
         ${settingsMenuButton("ログアウト", "/parent/settings/logout")}
         ${settingsMenuButton("退会", "/parent/settings/cancel", true)}
-        ${settingsMenuButton("デモの使い方", "/parent/demo-guide", false, "本番では非表示")}
-        ${settingsMenuButton("クラウド情報", "/parent/settings/cloud", false, "本番では非表示")}
-        ${settingsMenuButton("データ管理", "/parent/settings/data", true, "本番では非表示")}
       </div>
 
       ${bottomNav("settings")}
@@ -1569,12 +1574,21 @@ function parentEmailSettingsView() {
   return parentSettingsDetailView(
     "メールアドレス設定",
     `
-      <div class="card detail-card">
+      <form class="card detail-card form parent-account-settings-form" id="parent-email-form">
         <dl class="info-list">
           <div><dt>現在のメール</dt><dd>${escapeHtml(parent.email || "-")}</dd></div>
         </dl>
-        <p class="card-copy">メールアドレス変更は本番認証と接続後に利用できます。</p>
-      </div>
+        <div class="field">
+          <label for="parent-email-input">新しいメールアドレス</label>
+          <input id="parent-email-input" name="email" type="email" autocomplete="email" value="${escapeHtml(parent.email || "")}" required />
+        </div>
+        <div class="field">
+          <label for="parent-email-password">現在のパスワード</label>
+          <input id="parent-email-password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="error" id="parent-email-error"></div>
+        <button class="primary-button" type="submit">保存</button>
+      </form>
     `,
   );
 }
@@ -1583,9 +1597,22 @@ function parentPasswordSettingsView() {
   return parentSettingsDetailView(
     "パスワード変更",
     `
-      <div class="card detail-card">
-        <p class="card-copy">パスワード変更は本番認証と接続後に利用できます。</p>
-      </div>
+      <form class="card detail-card form parent-account-settings-form" id="parent-password-form">
+        <div class="field">
+          <label for="parent-current-password">現在のパスワード</label>
+          <input id="parent-current-password" name="currentPassword" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="field">
+          <label for="parent-new-password">新しいパスワード</label>
+          <input id="parent-new-password" name="newPassword" type="password" autocomplete="new-password" minlength="6" placeholder="6文字以上" required />
+        </div>
+        <div class="field">
+          <label for="parent-new-password-confirm">新しいパスワード（確認）</label>
+          <input id="parent-new-password-confirm" name="newPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required />
+        </div>
+        <div class="error" id="parent-password-error"></div>
+        <button class="primary-button" type="submit">保存</button>
+      </form>
     `,
   );
 }
@@ -1607,8 +1634,8 @@ function parentCancelSettingsView() {
     "退会",
     `
       <div class="card detail-card danger-zone">
-        <p class="card-copy">退会処理は本番の認証・課金連携後に有効化します。</p>
-        <button class="danger-button compact-button" type="button" disabled>本番実装後に利用可能</button>
+        <p class="card-copy">退会すると、この端末に保存されている保護者アカウント・こども情報・申請履歴などのデータを削除します。</p>
+        <button class="danger-button compact-button" type="button" id="show-parent-cancel-modal">退会する</button>
       </div>
     `,
   );
@@ -2856,13 +2883,14 @@ function childNewView() {
 
 function childProfilePhotoField(profilePhoto = null) {
   const photo = profilePhoto?.dataUrl;
+  const photoStyle = profilePhotoImageStyle(profilePhoto);
   const preview = photo
-    ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(profilePhoto?.name || "プロフィール写真")}" />`
+    ? `<img src="${escapeHtml(photo)}" alt="${escapeHtml(profilePhoto?.name || "プロフィール写真")}" ${photoStyle} />`
     : studyPayIcon("circle-user-round", "profile-photo-placeholder-icon");
 
   return `
     <div class="profile-photo-field">
-      <span class="profile-photo-label">プロフィール写真</span>
+      <span class="profile-photo-label">プロフィール写真<span class="required-mark">必須</span></span>
       <div class="profile-photo-control">
         <div class="profile-photo-stack">
           <div class="profile-photo-preview" id="profile-photo-preview" aria-hidden="true">
@@ -2871,13 +2899,7 @@ function childProfilePhotoField(profilePhoto = null) {
           <button class="profile-photo-button" type="button" data-profile-photo-button aria-label="写真を追加">
             ${studyPayIcon("camera", "profile-photo-camera-icon")}
           </button>
-          <div class="profile-photo-menu" data-profile-photo-menu hidden>
-            <button type="button" data-profile-photo-action="camera">写真を撮る</button>
-            <button type="button" data-profile-photo-action="library">写真から選択</button>
-            <button type="button" data-profile-photo-action="reset">デフォルトに戻す</button>
-          </div>
-          <input class="profile-photo-input" type="file" accept="image/*" capture="environment" data-profile-photo-input="camera" aria-hidden="true" tabindex="-1" />
-          <input class="profile-photo-input" type="file" accept="image/*" data-profile-photo-input="library" aria-hidden="true" tabindex="-1" />
+          <input class="profile-photo-input" type="file" accept="image/*" data-profile-photo-input aria-hidden="true" tabindex="-1" />
         </div>
       </div>
     </div>
@@ -4766,31 +4788,35 @@ function bindAdminLogin() {
 
 function bindParentHome() {
   bindParentShell();
+  bindRouteButtons();
   bindHomeExchangeUnitButtons();
-  const trigger = document.querySelector("#parent-child-switch-trigger");
+  const triggers = document.querySelectorAll("[data-parent-header-child-id]");
   const menu = document.querySelector("#parent-child-switch-menu");
+  const switchButton = menu?.querySelector("[data-switch-child-id]");
 
-  trigger?.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (!menu) {
-      navigate("/parent/children/new");
-      return;
-    }
+  triggers.forEach((trigger) => {
+    trigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!menu || !switchButton) {
+        return;
+      }
 
-    const nextHidden = !menu.hidden;
-    menu.hidden = nextHidden;
-    trigger.setAttribute("aria-expanded", String(!nextHidden));
+      const nextHidden = !menu.hidden && switchButton.dataset.switchChildId === trigger.dataset.parentHeaderChildId;
+      switchButton.dataset.switchChildId = trigger.dataset.parentHeaderChildId || "";
+      switchButton.textContent = `${trigger.dataset.parentHeaderChildName || "こども"}に切り替える`;
+      menu.hidden = nextHidden;
+      triggers.forEach((item) => item.setAttribute("aria-expanded", "false"));
+      trigger.setAttribute("aria-expanded", String(!nextHidden));
+    });
   });
 
-  menu?.querySelectorAll("[data-switch-child-id]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const child = getChildren().find((item) => item.id === button.dataset.switchChildId);
-      if (child) {
-        setChildSession(child);
-      }
+  switchButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const child = getChildren().find((item) => item.id === event.currentTarget.dataset.switchChildId);
+    if (child) {
+      setChildSession(child);
       navigate("/child");
-    });
+    }
   });
 
   document.addEventListener("click", (event) => {
@@ -4799,7 +4825,7 @@ function bindParentHome() {
     }
 
     menu.hidden = true;
-    trigger?.setAttribute("aria-expanded", "false");
+    triggers.forEach((trigger) => trigger.setAttribute("aria-expanded", "false"));
   });
 }
 
@@ -5533,83 +5559,159 @@ function bindChildNew() {
       }
 
       const profilePhoto = form._profilePhoto || null;
+      if (!profilePhoto?.dataUrl) {
+        error.textContent = "プロフィール写真を追加してください。";
+        return;
+      }
+
       const child = createChild({ nickname, profilePhoto, loginId, password });
       addChild(child);
-      navigate(`/parent/children/${child.id}`);
+      showChildDeviceChoiceModal(child);
     } catch (submitError) {
       error.textContent = submitError.message || "こどもを追加できませんでした。写真を変更してもう一度お試しください。";
     }
   });
 }
 
-function bindProfilePhotoPicker(container, { onFileSelected, onReset } = {}) {
-  const profilePhotoMenu = container.querySelector("[data-profile-photo-menu]");
+function showChildDeviceChoiceModal(child) {
+  document.querySelector("#child-device-choice-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal child-device-modal";
+  modal.id = "child-device-choice-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel child-device-modal-panel" role="dialog" aria-modal="true" aria-labelledby="child-device-choice-title">
+      <h2 id="child-device-choice-title">${escapeHtml(child.nickname)}さん用のスマホ or タブレットはありますか？</h2>
+      <div class="child-device-modal-actions">
+        <button class="primary-button" type="button" id="child-device-has-device">ある</button>
+        <button class="secondary-button" type="button" id="child-device-no-device">ない</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  document.querySelector("#child-device-has-device")?.addEventListener("click", () => {
+    closeModal();
+    showChildLoginQrModal(child);
+  });
+  document.querySelector("#child-device-no-device")?.addEventListener("click", () => {
+    closeModal();
+    showChildNoDeviceModal(child);
+  });
+}
+
+function showChildLoginQrModal(child) {
+  document.querySelector("#child-login-qr-modal")?.remove();
+
+  const loginUrl = childLoginUrl();
+  const qrSrc = childLoginQrUrl(loginUrl);
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal child-device-modal";
+  modal.id = "child-login-qr-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel child-device-modal-panel" role="dialog" aria-modal="true" aria-labelledby="child-login-qr-title">
+      <h2 id="child-login-qr-title">こどもログイン</h2>
+      <div class="child-login-qr-frame">
+        <img src="${escapeHtml(qrSrc)}" alt="こどもログインQRコード" />
+      </div>
+      <p>このQRコードを${escapeHtml(child.nickname)}さんの端末で読み取ってログインしてください</p>
+      <p>ログインID・パスワードは ホーム ＞ 詳細 で確認できます。</p>
+      <button class="primary-button" type="button" id="child-login-qr-ok">OK</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.querySelector("#child-login-qr-ok")?.addEventListener("click", () => {
+    modal.remove();
+    navigate("/parent");
+  });
+}
+
+function showChildNoDeviceModal(child) {
+  document.querySelector("#child-no-device-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal child-device-modal";
+  modal.id = "child-no-device-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel child-device-modal-panel" role="dialog" aria-modal="true" aria-labelledby="child-no-device-title">
+      <h2 id="child-no-device-title">${escapeHtml(child.nickname)}さんの利用方法</h2>
+      <p>ホーム画面の右上のアイコンをタップして</p>
+      <p>アカウントを切り替えてご利用ください。</p>
+      <button class="primary-button" type="button" id="child-no-device-ok">OK</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  document.querySelector("#child-no-device-ok")?.addEventListener("click", () => {
+    modal.remove();
+    navigate("/parent");
+  });
+}
+
+function childLoginUrl() {
+  const baseUrl = `${location.origin}${location.pathname}`;
+  return `${baseUrl}#/child/login`;
+}
+
+function childLoginQrUrl(loginUrl) {
+  const encodedUrl = encodeURIComponent(loginUrl);
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${encodedUrl}`;
+}
+
+function bindProfilePhotoPicker(container, { onFileSelected } = {}) {
   const profilePhotoButton = container.querySelector("[data-profile-photo-button]");
   const profilePhotoPreview = container.querySelector("#profile-photo-preview");
-  const toggleProfilePhotoMenu = () => {
-    if (profilePhotoMenu) {
-      profilePhotoMenu.hidden = !profilePhotoMenu.hidden;
-    }
+  const profilePhotoInput = container.querySelector("[data-profile-photo-input]");
+  const initialImage = profilePhotoPreview?.querySelector("img");
+  const initialPosition = readProfilePhotoImagePosition(initialImage);
+  const initialCrop = readProfilePhotoImageCrop(initialImage);
+  const initialPhoto = initialImage
+    ? {
+        name: initialImage.getAttribute("alt") || "プロフィール写真",
+        dataUrl: initialImage.getAttribute("src") || "",
+        positionX: initialPosition.x,
+        positionY: initialPosition.y,
+        scale: initialCrop.scale,
+      }
+    : null;
+  container._profilePhoto = container._profilePhoto || initialPhoto;
+
+  const openProfilePhotoInput = () => {
+    profilePhotoInput?.click();
   };
+
   profilePhotoButton?.addEventListener("click", () => {
-    toggleProfilePhotoMenu();
+    openProfilePhotoInput();
   });
   profilePhotoPreview?.addEventListener("click", () => {
-    toggleProfilePhotoMenu();
+    openProfilePhotoInput();
   });
 
-  container.addEventListener("click", (event) => {
-    if (!event.target.closest(".profile-photo-stack") && profilePhotoMenu) {
-      profilePhotoMenu.hidden = true;
+  profilePhotoInput?.addEventListener("change", async () => {
+    const file = profilePhotoInput.files?.[0] || null;
+    container._profilePhotoFile = file;
+    container._profilePhoto = null;
+    container._profilePhotoError = "";
+    if (!file) {
+      return;
     }
-  });
 
-  container.querySelectorAll("[data-profile-photo-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.dataset.profilePhotoAction === "reset") {
-        container._profilePhotoFile = null;
-        container._profilePhoto = null;
-        container._profilePhotoError = "";
-        container.querySelectorAll("[data-profile-photo-input]").forEach((input) => {
-          input.value = "";
-        });
-        updateProfilePhotoPreview(null);
-        onReset?.();
-        if (profilePhotoMenu) {
-          profilePhotoMenu.hidden = true;
-        }
+    try {
+      const profilePhoto = await createProfilePhotoSourceFromFile(file);
+      const positionedProfilePhoto = await showProfilePhotoPositionModal(profilePhoto);
+      if (!positionedProfilePhoto) {
+        profilePhotoInput.value = "";
         return;
       }
-
-      const input = container.querySelector(`[data-profile-photo-input="${button.dataset.profilePhotoAction}"]`);
-      if (profilePhotoMenu) {
-        profilePhotoMenu.hidden = true;
-      }
-      input?.click();
-    });
-  });
-
-  container.querySelectorAll("[data-profile-photo-input]").forEach((input) => {
-    input.addEventListener("change", async () => {
-      const file = input.files?.[0] || null;
-      container._profilePhotoFile = file;
-      container._profilePhoto = null;
-      container._profilePhotoError = "";
-      if (!file) {
-        updateProfilePhotoPreview(null);
-        return;
-      }
-
-      try {
-        const profilePhoto = await createProfilePhotoFromFile(file);
-        container._profilePhoto = profilePhoto;
-        updateProfilePhotoPreview(profilePhoto);
-        await onFileSelected?.(profilePhoto);
-      } catch {
-        container._profilePhotoError = "写真を読み込めませんでした。別の写真を選んでください。";
-        updateProfilePhotoPreview(null);
-      }
-    });
+      container._profilePhoto = positionedProfilePhoto;
+      updateProfilePhotoPreview(positionedProfilePhoto);
+      await onFileSelected?.(positionedProfilePhoto);
+    } catch {
+      container._profilePhotoError = "写真を読み込めませんでした。別の写真を選んでください。";
+      updateProfilePhotoPreview(null);
+    }
   });
 }
 
@@ -5624,7 +5726,277 @@ function updateProfilePhotoPreview(profilePhoto) {
     return;
   }
 
-  preview.innerHTML = `<img src="${escapeHtml(profilePhoto.dataUrl)}" alt="${escapeHtml(profilePhoto.name || "選択したプロフィール写真")}" />`;
+  preview.innerHTML = `<img src="${escapeHtml(profilePhoto.dataUrl)}" alt="${escapeHtml(profilePhoto.name || "選択したプロフィール写真")}" ${profilePhotoImageStyle(profilePhoto)} />`;
+}
+
+function showProfilePhotoPositionModal(profilePhoto) {
+  return new Promise((resolve) => {
+    document.querySelector("#profile-photo-position-modal")?.remove();
+    const crop = normalizeProfilePhotoCrop(profilePhoto);
+    const modal = document.createElement("div");
+    modal.className = "parent-switch-modal profile-photo-position-modal";
+    modal.id = "profile-photo-position-modal";
+    modal.innerHTML = `
+      <div class="profile-photo-position-panel" role="dialog" aria-modal="true" aria-labelledby="profile-photo-position-title">
+        <div class="profile-photo-position-header">
+          <button class="profile-photo-position-text-button" type="button" data-profile-position-cancel>キャンセル</button>
+          <h2 id="profile-photo-position-title">プロフィール画像</h2>
+          <button class="profile-photo-position-done-button" type="button" data-profile-position-save>完了</button>
+        </div>
+        <div class="profile-photo-position-stage">
+          <div class="profile-photo-position-frame" data-profile-position-frame>
+            <img src="${escapeHtml(profilePhoto.dataUrl)}" alt="${escapeHtml(profilePhoto.name || "プロフィール写真")}" data-profile-position-image />
+          </div>
+        </div>
+        <p class="profile-photo-position-hint">写真を動かして位置調整・2本指で拡大縮小</p>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const frame = modal.querySelector("[data-profile-position-frame]");
+    const image = modal.querySelector("[data-profile-position-image]");
+    const setImageTransform = () => {
+      constrainProfilePhotoCrop(crop, frame, image);
+      const metrics = profilePhotoRenderMetrics(
+        image.naturalWidth || image.width || PROFILE_PHOTO_MAX_SIZE,
+        image.naturalHeight || image.height || PROFILE_PHOTO_MAX_SIZE,
+        crop,
+        frame,
+      );
+      image.style.width = `${metrics.renderedWidth}px`;
+      image.style.height = `${metrics.renderedHeight}px`;
+      image.style.transform = `translate(${metrics.targetX}px, ${metrics.targetY}px)`;
+    };
+    image.addEventListener("load", setImageTransform, { once: true });
+    setImageTransform();
+
+    const pointers = new Map();
+    let dragState = null;
+    let pinchState = null;
+    const getPointerDistance = () => {
+      const points = Array.from(pointers.values());
+      if (points.length < 2) {
+        return 0;
+      }
+      return Math.hypot(points[0].clientX - points[1].clientX, points[0].clientY - points[1].clientY);
+    };
+    const startDrag = (event) => {
+      event.preventDefault();
+      pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+      frame.setPointerCapture?.(event.pointerId);
+      if (pointers.size === 2) {
+        pinchState = {
+          distance: getPointerDistance(),
+          scale: crop.scale,
+          offsetX: crop.offsetX,
+          offsetY: crop.offsetY,
+        };
+        dragState = null;
+        return;
+      }
+      dragState = {
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        offsetX: crop.offsetX,
+        offsetY: crop.offsetY,
+      };
+    };
+    const moveDrag = (event) => {
+      if (!pointers.has(event.pointerId)) {
+        return;
+      }
+      pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+      if (pointers.size >= 2 && pinchState) {
+        const nextDistance = getPointerDistance();
+        if (pinchState.distance > 0) {
+          crop.scale = clampProfilePhotoScale(pinchState.scale * (nextDistance / pinchState.distance));
+          setImageTransform();
+        }
+        return;
+      }
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+      crop.offsetX = dragState.offsetX + event.clientX - dragState.startClientX;
+      crop.offsetY = dragState.offsetY + event.clientY - dragState.startClientY;
+      setImageTransform();
+    };
+    const endDrag = (event) => {
+      pointers.delete(event.pointerId);
+      frame.releasePointerCapture?.(event.pointerId);
+      if (pointers.size < 2) {
+        pinchState = null;
+      }
+      if (dragState?.pointerId === event.pointerId || pointers.size === 0) {
+        dragState = pointers.size === 1
+          ? {
+              pointerId: Array.from(pointers.keys())[0],
+              startClientX: Array.from(pointers.values())[0].clientX,
+              startClientY: Array.from(pointers.values())[0].clientY,
+              offsetX: crop.offsetX,
+              offsetY: crop.offsetY,
+            }
+          : null;
+      }
+    };
+
+    frame.addEventListener("pointerdown", startDrag);
+    frame.addEventListener("pointermove", moveDrag);
+    frame.addEventListener("pointerup", endDrag);
+    frame.addEventListener("pointercancel", endDrag);
+    frame.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      crop.scale = clampProfilePhotoScale(crop.scale + (event.deltaY < 0 ? 0.08 : -0.08));
+      setImageTransform();
+    });
+
+    const closeModal = (result) => {
+      modal.remove();
+      resolve(result);
+    };
+    modal.querySelector("[data-profile-position-save]")?.addEventListener("click", async () => {
+      try {
+        closeModal(await createCroppedProfilePhoto(profilePhoto, crop, frame));
+      } catch {
+        closeModal(null);
+      }
+    });
+    modal.querySelector("[data-profile-position-cancel]")?.addEventListener("click", () => closeModal(null));
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        closeModal(null);
+      }
+    });
+  });
+}
+
+function normalizeProfilePhotoPosition(profilePhoto) {
+  return {
+    x: clampProfilePhotoPosition(profilePhoto?.positionX ?? 50),
+    y: clampProfilePhotoPosition(profilePhoto?.positionY ?? 50),
+  };
+}
+
+function normalizeProfilePhotoCrop(profilePhoto) {
+  return {
+    scale: clampProfilePhotoScale(profilePhoto?.scale ?? 1),
+    offsetX: Number.isFinite(Number(profilePhoto?.offsetX)) ? Number(profilePhoto.offsetX) : 0,
+    offsetY: Number.isFinite(Number(profilePhoto?.offsetY)) ? Number(profilePhoto.offsetY) : 0,
+  };
+}
+
+function clampProfilePhotoPosition(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return 50;
+  }
+  return Math.min(100, Math.max(0, number));
+}
+
+function clampProfilePhotoScale(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return 1;
+  }
+  return Math.min(3, Math.max(1, number));
+}
+
+function profilePhotoImageStyle(profilePhoto) {
+  const position = normalizeProfilePhotoPosition(profilePhoto);
+  const crop = normalizeProfilePhotoCrop(profilePhoto);
+  return `style="object-position: ${position.x}% ${position.y}%; transform: scale(${crop.scale});"`;
+}
+
+function readProfilePhotoImagePosition(image) {
+  if (!image) {
+    return { x: 50, y: 50 };
+  }
+  const [x = "50%", y = "50%"] = String(image.style.objectPosition || "50% 50%").split(/\s+/);
+  return {
+    x: clampProfilePhotoPosition(String(x).replace("%", "")),
+    y: clampProfilePhotoPosition(String(y).replace("%", "")),
+  };
+}
+
+function readProfilePhotoImageCrop(image) {
+  if (!image) {
+    return { scale: 1 };
+  }
+  const scaleMatch = String(image.style.transform || "").match(/scale\(([^)]+)\)/);
+  return {
+    scale: clampProfilePhotoScale(scaleMatch?.[1] ?? 1),
+  };
+}
+
+function createCroppedProfilePhoto(profilePhoto, crop, frame) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onerror = () => reject(new Error("写真を処理できませんでした。"));
+    image.onload = () => {
+      const outputSize = PROFILE_PHOTO_MAX_SIZE;
+      const frameSize = Math.max(1, Math.round(frame.getBoundingClientRect().width || outputSize));
+      const sourceWidth = image.naturalWidth || image.width || outputSize;
+      const sourceHeight = image.naturalHeight || image.height || outputSize;
+      const metrics = profilePhotoRenderMetrics(sourceWidth, sourceHeight, crop, frame);
+      const outputRatio = outputSize / frameSize;
+      const canvas = document.createElement("canvas");
+      canvas.width = outputSize;
+      canvas.height = outputSize;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        reject(new Error("写真を処理できませんでした。"));
+        return;
+      }
+
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, outputSize, outputSize);
+      context.drawImage(
+        image,
+        metrics.targetX * outputRatio,
+        metrics.targetY * outputRatio,
+        metrics.renderedWidth * outputRatio,
+        metrics.renderedHeight * outputRatio,
+      );
+      resolve({
+        name: profilePhoto.name || "プロフィール写真",
+        dataUrl: canvas.toDataURL("image/jpeg", PROFILE_PHOTO_JPEG_QUALITY),
+        positionX: 50,
+        positionY: 50,
+        scale: 1,
+        updatedAt: new Date().toISOString(),
+      });
+    };
+    image.src = profilePhoto.dataUrl;
+  });
+}
+
+function constrainProfilePhotoCrop(crop, frame, image) {
+  const fallbackFrameSize = Math.max(1, Math.round(frame?.getBoundingClientRect()?.width || PROFILE_PHOTO_MAX_SIZE));
+  const sourceWidth = image?.naturalWidth || image?.width || fallbackFrameSize;
+  const sourceHeight = image?.naturalHeight || image?.height || fallbackFrameSize;
+  const { frameSize, renderedWidth, renderedHeight } = profilePhotoRenderMetrics(sourceWidth, sourceHeight, crop, frame);
+  const maxOffsetX = Math.max(0, (renderedWidth - frameSize) / 2);
+  const maxOffsetY = Math.max(0, (renderedHeight - frameSize) / 2);
+  crop.offsetX = Math.min(maxOffsetX, Math.max(-maxOffsetX, crop.offsetX));
+  crop.offsetY = Math.min(maxOffsetY, Math.max(-maxOffsetY, crop.offsetY));
+}
+
+function profilePhotoRenderMetrics(sourceWidth, sourceHeight, crop, frame) {
+  const rect = frame?.getBoundingClientRect();
+  const frameSize = Math.max(1, Math.round(rect?.width || PROFILE_PHOTO_MAX_SIZE));
+  const normalizedSourceWidth = Math.max(1, Number(sourceWidth || frameSize));
+  const normalizedSourceHeight = Math.max(1, Number(sourceHeight || frameSize));
+  const coverScale = Math.max(frameSize / normalizedSourceWidth, frameSize / normalizedSourceHeight);
+  const renderedWidth = normalizedSourceWidth * coverScale * crop.scale;
+  const renderedHeight = normalizedSourceHeight * coverScale * crop.scale;
+  return {
+    frameSize,
+    renderedWidth,
+    renderedHeight,
+    targetX: (frameSize - renderedWidth) / 2 + crop.offsetX,
+    targetY: (frameSize - renderedHeight) / 2 + crop.offsetY,
+  };
 }
 
 function bindChildDetail(child) {
@@ -5638,9 +6010,6 @@ function bindChildDetail(child) {
     bindProfilePhotoPicker(profilePhotoContainer, {
       onFileSelected: async (profilePhoto) => {
         updateChild(child.id, { profilePhoto });
-      },
-      onReset: () => {
-        updateChild(child.id, { profilePhoto: null });
       },
     });
   }
@@ -5670,6 +6039,10 @@ function maskedPassword() {
 
 function isValidChildPassword(password) {
   return /^[A-Za-z0-9]{6,}$/.test(password);
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || ""));
 }
 
 function showChildNicknameModal(child) {
@@ -5814,6 +6187,38 @@ function showChildDeleteModal(child) {
     updateChild(child.id, { status: "deleted", deletedAt: new Date().toISOString() });
     closeModal();
     navigate("/parent");
+  });
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+}
+
+function showParentCancelModal() {
+  document.querySelector("#parent-cancel-modal")?.remove();
+
+  const modal = document.createElement("div");
+  modal.className = "parent-switch-modal child-delete-modal";
+  modal.id = "parent-cancel-modal";
+  modal.innerHTML = `
+    <div class="parent-switch-modal-panel" role="dialog" aria-modal="true" aria-labelledby="parent-cancel-title">
+      <h2 id="parent-cancel-title">退会しますか？</h2>
+      <p>退会すると、この端末に保存されている保護者アカウント・こども情報・申請履歴・ポイント履歴などのデータは削除されます。この操作は元に戻せません。</p>
+      <div class="confirm-actions">
+        <button class="danger-button child-delete-modal-confirm" type="button" id="confirm-parent-cancel">退会する</button>
+        <button class="secondary-button" type="button" id="cancel-parent-cancel">キャンセル</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const closeModal = () => modal.remove();
+  document.querySelector("#cancel-parent-cancel")?.addEventListener("click", closeModal);
+  document.querySelector("#confirm-parent-cancel")?.addEventListener("click", () => {
+    cancelParentAccount();
+    closeModal();
+    navigate("/");
   });
   modal.addEventListener("click", (event) => {
     if (event.target === modal) {
@@ -8254,6 +8659,75 @@ function bindParentShell() {
     clearSession();
     navigate("/");
   });
+  document.querySelector("#show-parent-cancel-modal")?.addEventListener("click", showParentCancelModal);
+  bindParentEmailSettingsForm();
+  bindParentPasswordSettingsForm();
+}
+
+function bindParentEmailSettingsForm() {
+  document.querySelector("#parent-email-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const parent = loadAccount();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") || "").trim();
+    const password = String(form.get("password") || "");
+    const error = document.querySelector("#parent-email-error");
+    if (!parent) {
+      error.textContent = "アカウント情報を確認できませんでした。";
+      return;
+    }
+    if (!isValidEmail(email)) {
+      error.textContent = "メールアドレスを確認してください。";
+      return;
+    }
+    if (password !== parent.demoPassword) {
+      error.textContent = "現在のパスワードが一致しません。";
+      return;
+    }
+
+    saveAccount({
+      ...parent,
+      email,
+    });
+    state.flash = "メールアドレスを変更しました。";
+    render();
+  });
+}
+
+function bindParentPasswordSettingsForm() {
+  document.querySelector("#parent-password-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const parent = loadAccount();
+    const form = new FormData(event.currentTarget);
+    const currentPassword = String(form.get("currentPassword") || "");
+    const newPassword = String(form.get("newPassword") || "");
+    const newPasswordConfirm = String(form.get("newPasswordConfirm") || "");
+    const error = document.querySelector("#parent-password-error");
+    if (!parent) {
+      error.textContent = "アカウント情報を確認できませんでした。";
+      return;
+    }
+    if (currentPassword !== parent.demoPassword) {
+      error.textContent = "現在のパスワードが一致しません。";
+      return;
+    }
+    if (newPassword.length < 6) {
+      error.textContent = "新しいパスワードは6文字以上で入力してください。";
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      error.textContent = "新しいパスワードが一致しません。";
+      return;
+    }
+
+    saveAccount({
+      ...parent,
+      demoPassword: newPassword,
+      passwordUpdatedAt: new Date().toISOString(),
+    });
+    state.flash = "パスワードを変更しました。";
+    render();
+  });
 }
 
 function bindParentExchangeUnitSettings() {
@@ -9401,6 +9875,18 @@ function resetPrototypeData() {
   state.flash = "";
 }
 
+function cancelParentAccount() {
+  localStorage.removeItem(ACCOUNT_KEY);
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(CHILD_SESSION_KEY);
+  if (localStorage.getItem(LAST_APP_MODE_KEY) === "parent" || localStorage.getItem(LAST_APP_MODE_KEY) === "child") {
+    localStorage.removeItem(LAST_APP_MODE_KEY);
+  }
+  state.parent = null;
+  state.route = "/";
+  state.flash = "";
+}
+
 function createDemoData() {
   const parent = loadAccount() || {
     ...initialParent,
@@ -10050,7 +10536,7 @@ function createApplication(child, values) {
   };
 }
 
-function createProfilePhotoFromFile(file) {
+function createProfilePhotoSourceFromFile(file) {
   return new Promise((resolve, reject) => {
     if (!file?.type?.startsWith("image/")) {
       reject(new Error("画像ファイルを選択してください。"));
@@ -10063,26 +10549,14 @@ function createProfilePhotoFromFile(file) {
       const image = new Image();
       image.onerror = () => reject(new Error("写真を読み込めませんでした。"));
       image.onload = () => {
-        const scale = Math.min(
-          1,
-          PROFILE_PHOTO_MAX_SIZE / image.width,
-          PROFILE_PHOTO_MAX_SIZE / image.height,
-        );
-        const width = Math.max(1, Math.round(image.width * scale));
-        const height = Math.max(1, Math.round(image.height * scale));
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const context = canvas.getContext("2d");
-        if (!context) {
-          reject(new Error("写真を処理できませんでした。"));
-          return;
-        }
-
-        context.drawImage(image, 0, 0, width, height);
         resolve({
           name: file.name,
-          dataUrl: canvas.toDataURL("image/jpeg", PROFILE_PHOTO_JPEG_QUALITY),
+          dataUrl: String(reader.result || ""),
+          sourceWidth: image.naturalWidth || image.width || 1,
+          sourceHeight: image.naturalHeight || image.height || 1,
+          positionX: 50,
+          positionY: 50,
+          scale: 1,
         });
       };
       image.src = String(reader.result || "");
@@ -10987,6 +11461,12 @@ function studyPayIcon(name, className = "") {
       <path d="M18 20a6 6 0 0 0-12 0"/>
       <circle cx="12" cy="10" r="4"/>
       <circle cx="12" cy="12" r="10"/>
+    `,
+    "user-round-plus": `
+      <path d="M2 21a8 8 0 0 1 13.292-6"/>
+      <circle cx="10" cy="8" r="5"/>
+      <path d="M19 16v6"/>
+      <path d="M22 19h-6"/>
     `,
     eye: `
       <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/>
