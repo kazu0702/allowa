@@ -504,14 +504,7 @@ button {
 }
 
 .feature-list::before {
-  position: absolute;
-  top: 20px;
-  bottom: 34px;
-  left: 18px;
-  width: 3px;
-  border-radius: 999px;
-  background: #ffd4a4;
-  content: "";
+  display: none;
 }
 
 .mini-card,
@@ -532,6 +525,18 @@ button {
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.mini-card:not(:last-child)::after {
+  position: absolute;
+  top: 35px;
+  bottom: -24px;
+  left: 18px;
+  z-index: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: #ffd4a4;
+  content: "";
 }
 
 .mini-card strong {

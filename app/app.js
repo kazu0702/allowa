@@ -1112,24 +1112,6 @@ function lpView() {
         </div>
       </section>
 
-      <section class="section price-section">
-        <span class="lp-section-kicker">price</span>
-        <h2>料金</h2>
-        <div class="card price-box">
-          <span class="summary-kicker">14日間無料トライアル</span>
-          <div class="lp-price-options">
-            <div class="lp-price-option">
-              <span>月払い</span>
-              <div class="price"><strong>500円</strong><span>/ 月</span></div>
-            </div>
-            <div class="lp-price-option">
-              <span>年払い</span>
-              <div class="price"><strong>5,000円</strong><span>/ 年</span></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section class="section faq-section">
         <span class="lp-section-kicker">FAQ</span>
         <h2>よくある質問</h2>
@@ -1296,10 +1278,6 @@ function parentHomeView() {
           ` : ""}
           ${parentChildSwitchMenu(children)}
         </div>
-      </div>
-
-      <div class="parent-home-status">
-        <p class="parent-trial-banner">${parentHomeSubscriptionSummary(subscription)}</p>
       </div>
 
       ${subscription.status === "grace_period" ? `<div class="notice-card">支払い確認中です。猶予期間中は通常どおり利用できます。</div>` : ""}
